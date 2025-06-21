@@ -1,0 +1,706 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ROS2节点与话题通信原理</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        body {
+            background: linear-gradient(135deg, #1a2a6c, #2c3e50, #1a2a6c);
+            color: #fff;
+            min-height: 100vh;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            overflow-x: hidden;
+        }
+        
+        header {
+            text-align: center;
+            margin: 20px 0 30px;
+            width: 100%;
+            padding: 20px;
+        }
+        
+        h1 {
+            font-size: 2.8rem;
+            margin-bottom: 15px;
+            text-shadow: 0 2px 10px rgba(0,0,0,0.3);
+            background: linear-gradient(45deg, #00c6ff, #0072ff);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        
+        .subtitle {
+            font-size: 1.2rem;
+            opacity: 0.9;
+            max-width: 800px;
+            margin: 0 auto;
+            line-height: 1.6;
+            color: #e0f7fa;
+        }
+        
+        .container {
+            display: flex;
+            width: 100%;
+            max-width: 1200px;
+            margin: 20px auto;
+            gap: 30px;
+        }
+        
+        .animation-section {
+            flex: 3;
+            background: rgba(10, 20, 40, 0.85);
+            border-radius: 20px;
+            padding: 25px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(64, 164, 223, 0.3);
+        }
+        
+        .control-section {
+            flex: 2;
+            background: rgba(10, 20, 40, 0.85);
+            border-radius: 20px;
+            padding: 25px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(64, 164, 223, 0.3);
+        }
+        
+        .animation-area {
+            position: relative;
+            height: 400px;
+            background: rgba(15, 30, 60, 0.7);
+            border-radius: 15px;
+            margin-top: 20px;
+            overflow: hidden;
+            border: 1px solid rgba(100, 180, 255, 0.3);
+        }
+        
+        .node {
+            position: absolute;
+            width: 180px;
+            height: 180px;
+            border-radius: 50%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            padding: 20px;
+            font-weight: bold;
+            z-index: 10;
+            transition: all 0.3s ease;
+            top: 110px;
+        }
+        
+        .publisher {
+            left: 80px;
+            background: radial-gradient(circle, #0066cc, #004080);
+            border: 3px solid #00aaff;
+            box-shadow: 0 0 30px rgba(0, 150, 255, 0.6);
+        }
+        
+        .subscriber {
+            right: 80px;
+            background: radial-gradient(circle, #cc3300, #992600);
+            border: 3px solid #ff7733;
+            box-shadow: 0 0 30px rgba(255, 100, 0, 0.6);
+        }
+        
+        .node-label {
+            font-size: 1.8rem;
+            margin-bottom: 10px;
+            color: #fff;
+        }
+        
+        .node-role {
+            font-size: 1.2rem;
+            color: rgba(255, 255, 255, 0.9);
+            margin-bottom: 15px;
+        }
+        
+        .topic {
+            position: absolute;
+            top: 180px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 440px;
+            height: 40px;
+            background: rgba(50, 180, 100, 0.15);
+            border: 2px dashed rgba(80, 220, 120, 0.6);
+            border-radius: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 1.5rem;
+            color: #7fff7f;
+            z-index: 5;
+        }
+        
+        .message {
+            position: absolute;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background: radial-gradient(circle, #ffff00, #ffaa00);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 1.8rem;
+            z-index: 20;
+            box-shadow: 0 0 20px rgba(255, 200, 0, 0.8);
+            opacity: 0;
+            transition: left 1s ease, top 1s ease;
+        }
+        
+        .message-content {
+            position: absolute;
+            background: rgba(255, 255, 200, 0.95);
+            color: #333;
+            padding: 10px 15px;
+            border-radius: 10px;
+            font-size: 1.1rem;
+            min-width: 180px;
+            text-align: center;
+            top: -60px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        
+        .control-panel {
+            margin-top: 25px;
+        }
+        
+        .input-group {
+            margin-bottom: 25px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 10px;
+            font-size: 1.2rem;
+            color: #e0f7fa;
+        }
+        
+        input {
+            width: 100%;
+            padding: 14px;
+            border-radius: 10px;
+            border: none;
+            background: rgba(30, 60, 90, 0.7);
+            color: white;
+            font-size: 1.1rem;
+            border: 1px solid rgba(100, 180, 255, 0.4);
+        }
+        
+        input:focus {
+            outline: none;
+            border-color: #00aaff;
+            background: rgba(40, 80, 120, 0.8);
+            box-shadow: 0 0 10px rgba(0, 150, 255, 0.5);
+        }
+        
+        button {
+            width: 100%;
+            padding: 15px;
+            background: linear-gradient(45deg, #0066cc, #0099ff);
+            border: none;
+            border-radius: 10px;
+            color: white;
+            font-size: 1.2rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 5px 15px rgba(0, 100, 255, 0.5);
+            margin-top: 10px;
+        }
+        
+        button:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 8px 20px rgba(0, 150, 255, 0.7);
+            background: linear-gradient(45deg, #0088ff, #00ccff);
+        }
+        
+        button:active {
+            transform: translateY(1px);
+        }
+        
+        .code-section {
+            margin-top: 25px;
+            background: rgba(0, 20, 40, 0.9);
+            border-radius: 10px;
+            padding: 20px;
+            font-family: 'Consolas', 'Courier New', monospace;
+            overflow-x: auto;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        
+        .code-tabs {
+            display: flex;
+            margin-bottom: 15px;
+            border-bottom: 1px solid rgba(80, 180, 255, 0.4);
+        }
+        
+        .code-tab {
+            padding: 10px 20px;
+            cursor: pointer;
+            border-radius: 5px 5px 0 0;
+            background: rgba(80, 160, 255, 0.2);
+            margin-right: 5px;
+            color: #bbddfa;
+            transition: all 0.3s;
+        }
+        
+        .code-tab:hover {
+            background: rgba(80, 160, 255, 0.3);
+        }
+        
+        .code-tab.active {
+            background: rgba(80, 160, 255, 0.5);
+            font-weight: bold;
+            color: white;
+        }
+        
+        pre {
+            color: #aaffaa;
+            line-height: 1.5;
+            font-size: 1rem;
+            white-space: pre-wrap;
+        }
+        
+        .received-messages {
+            margin-top: 20px;
+            background: rgba(0, 20, 40, 0.9);
+            border-radius: 10px;
+            padding: 15px;
+            max-height: 150px;
+            overflow-y: auto;
+        }
+        
+        .received-messages h3 {
+            margin-bottom: 10px;
+            color: #ffaa00;
+            text-align: center;
+        }
+        
+        .message-item {
+            padding: 8px;
+            border-bottom: 1px solid rgba(100, 180, 255, 0.2);
+            font-family: 'Courier New', monospace;
+            color: #e0f7fa;
+        }
+        
+        .message-item:last-child {
+            border-bottom: none;
+        }
+        
+        .explanation {
+            max-width: 1200px;
+            margin: 30px auto;
+            background: rgba(10, 30, 60, 0.8);
+            border-radius: 15px;
+            padding: 25px;
+            line-height: 1.7;
+            font-size: 1.1rem;
+            border: 1px solid rgba(80, 180, 255, 0.3);
+        }
+        
+        .explanation h2 {
+            color: #00ccff;
+            margin-bottom: 20px;
+            text-align: center;
+            font-size: 1.8rem;
+        }
+        
+        .highlight {
+            color: #ffcc00;
+            font-weight: bold;
+        }
+        
+        .explanation ul {
+            padding-left: 30px;
+            margin: 15px 0;
+        }
+        
+        .explanation li {
+            margin-bottom: 10px;
+        }
+        
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(0, 200, 255, 0.7); }
+            70% { box-shadow: 0 0 0 15px rgba(0, 200, 255, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(0, 200, 255, 0); }
+        }
+        
+        .pulse {
+            animation: pulse 2s infinite;
+        }
+        
+        @media (max-width: 900px) {
+            .container {
+                flex-direction: column;
+            }
+            
+            .node {
+                width: 140px;
+                height: 140px;
+            }
+            
+            .publisher {
+                left: 30px;
+            }
+            
+            .subscriber {
+                right: 30px;
+            }
+            
+            .topic {
+                width: 300px;
+            }
+        }
+        
+        @media (max-width: 600px) {
+            .node {
+                width: 120px;
+                height: 120px;
+                top: 130px;
+            }
+            
+            .node-label {
+                font-size: 1.5rem;
+            }
+            
+            .node-role {
+                font-size: 1rem;
+            }
+            
+            .topic {
+                width: 240px;
+                font-size: 1.2rem;
+            }
+            
+            h1 {
+                font-size: 2.2rem;
+            }
+        }
+        
+        .ros-logo {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            width: 80px;
+            height: 80px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-weight: bold;
+            font-size: 1.8rem;
+            color: #00aaff;
+            box-shadow: 0 0 20px rgba(0, 150, 255, 0.5);
+        }
+        
+        .connection-line {
+            position: absolute;
+            height: 4px;
+            background: rgba(100, 200, 255, 0.3);
+            top: 180px;
+            left: 260px;
+            width: 280px;
+            z-index: 1;
+        }
+        
+        .connection-dot {
+            position: absolute;
+            width: 8px;
+            height: 8px;
+            background: rgba(100, 200, 255, 0.8);
+            border-radius: 50%;
+            top: 178px;
+            z-index: 2;
+        }
+    </style>
+</head>
+<body>
+    <div class="ros-logo">ROS2</div>
+    
+    <header>
+        <h1>ROS2 节点与话题通信原理</h1>
+        <p class="subtitle">本动画展示了ROS2中节点(Node)如何通过话题(Topic)进行通信。发布者节点将消息发送到话题，订阅者节点从话题接收消息。</p>
+    </header>
+    
+    <div class="container">
+        <section class="animation-section">
+            <h2>通信过程演示</h2>
+            <div class="animation-area">
+                <div class="connection-line"></div>
+                <div class="connection-dot" style="left: 260px;"></div>
+                <div class="connection-dot" style="left: 340px;"></div>
+                <div class="connection-dot" style="left: 420px;"></div>
+                <div class="connection-dot" style="left: 500px;"></div>
+                <div class="connection-dot" style="left: 580px;"></div>
+                
+                <div class="node publisher pulse">
+                    <div class="node-label">Node 1</div>
+                    <div class="node-role">发布者</div>
+                    <div class="node-info">/talker</div>
+                </div>
+                
+                <div class="node subscriber">
+                    <div class="node-label">Node 2</div>
+                    <div class="node-role">订阅者</div>
+                    <div class="node-info">/listener</div>
+                </div>
+                
+                <div class="topic">/chatter</div>
+                
+                <div class="message" id="message-bubble">
+                    <div class="message-content" id="message-content">Hello ROS2!</div>
+                </div>
+            </div>
+        </section>
+        
+        <section class="control-section">
+            <h2>控制面板</h2>
+            <div class="control-panel">
+                <div class="input-group">
+                    <label for="message-input">输入消息内容：</label>
+                    <input type="text" id="message-input" value="Hello ROS2!" placeholder="输入要发送的消息...">
+                </div>
+                
+                <button id="send-btn">发送消息</button>
+                
+                <div class="received-messages">
+                    <h3>已接收消息：</h3>
+                    <div id="message-list">
+                        <div class="message-item">等待消息...</div>
+                    </div>
+                </div>
+                
+                <div class="code-section">
+                    <div class="code-tabs">
+                        <div class="code-tab active" data-tab="publisher">发布者代码</div>
+                        <div class="code-tab" data-tab="subscriber">订阅者代码</div>
+                    </div>
+                    <pre id="publisher-code">
+import rclpy
+from rclpy.node import Node
+from std_msgs.msg import String
+
+class PublisherNode(Node):
+    def __init__(self):
+        super().__init__('talker')
+        self.publisher = self.create_publisher(String, 'chatter', 10)
+        self.timer = self.create_timer(1.0, self.timer_callback)
+        self.i = 0
+        
+    def timer_callback(self):
+        msg = String()
+        msg.data = 'Hello World: %d' % self.i
+        self.publisher.publish(msg)
+        self.get_logger().info('发布消息: "%s"' % msg.data)
+        self.i += 1
+
+def main(args=None):
+    rclpy.init(args=args)
+    node = PublisherNode()
+    rclpy.spin(node)
+    rclpy.shutdown()
+
+if __name__ == '__main__':
+    main()</pre>
+                    <pre id="subscriber-code" style="display:none;">
+import rclpy
+from rclpy.node import Node
+from std_msgs.msg import String
+
+class SubscriberNode(Node):
+    def __init__(self):
+        super().__init__('listener')
+        self.subscription = self.create_subscription(
+            String,
+            'chatter',
+            self.listener_callback,
+            10)
+        
+    def listener_callback(self, msg):
+        self.get_logger().info('收到消息: "%s"' % msg.data)
+
+def main(args=None):
+    rclpy.init(args=args)
+    node = SubscriberNode()
+    rclpy.spin(node)
+    rclpy.shutdown()
+
+if __name__ == '__main__':
+    main()</pre>
+                </div>
+            </div>
+        </section>
+    </div>
+    
+    <div class="explanation">
+        <h2>ROS2 节点与话题通信原理</h2>
+        <p>在ROS2中，<span class="highlight">节点(Node)</span>是执行计算的进程。节点之间通过<span class="highlight">话题(Topic)</span>进行通信，这是一种发布/订阅模型。</p>
+        
+        <p><span class="highlight">发布者(Publisher)</span>节点将消息发送到指定的话题，而<span class="highlight">订阅者(Subscriber)</span>节点从话题接收消息。这种通信方式具有以下特点：</p>
+        
+        <ul>
+            <li><span class="highlight">解耦</span>：发布者和订阅者不需要知道对方的存在</li>
+            <li><span class="highlight">异步</span>：消息发送和接收是独立进行的</li>
+            <li><span class="highlight">多对多</span>：可以有多个发布者和订阅者使用同一个话题</li>
+            <li><span class="highlight">类型安全</span>：所有消息都有明确定义的数据类型</li>
+            <li><span class="highlight">实时性</span>：支持实时通信需求</li>
+            <li><span class="highlight">QoS策略</span>：提供灵活的消息传递质量设置</li>
+        </ul>
+        
+        <p>在本动画中，您可以通过输入自定义消息并点击"发送消息"按钮来模拟ROS2中的消息发布过程。消息会从发布者节点中心传输到话题中心，再传输到订阅者节点中心。</p>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const sendBtn = document.getElementById('send-btn');
+            const messageInput = document.getElementById('message-input');
+            const messageBubble = document.getElementById('message-bubble');
+            const messageContent = document.getElementById('message-content');
+            const messageList = document.getElementById('message-list');
+            const publisherTab = document.querySelector('[data-tab="publisher"]');
+            const subscriberTab = document.querySelector('[data-tab="subscriber"]');
+            const publisherCode = document.getElementById('publisher-code');
+            const subscriberCode = document.getElementById('subscriber-code');
+            const publisherNode = document.querySelector('.publisher');
+            const subscriberNode = document.querySelector('.subscriber');
+            const topicNode = document.querySelector('.topic');
+            
+            // 获取元素中心位置
+            function getElementCenter(element) {
+                const rect = element.getBoundingClientRect();
+                const containerRect = document.querySelector('.animation-area').getBoundingClientRect();
+                return {
+                    x: rect.left + rect.width/2 - containerRect.left,
+                    y: rect.top + rect.height/2 - containerRect.top
+                };
+            }
+            
+            // 获取发布者、话题和订阅者的中心位置
+            const publisherCenter = getElementCenter(publisherNode);
+            const topicCenter = getElementCenter(topicNode);
+            const subscriberCenter = getElementCenter(subscriberNode);
+            
+            // 初始设置消息在发布者中心
+            messageBubble.style.left = (publisherCenter.x - 25) + 'px';
+            messageBubble.style.top = (publisherCenter.y - 25) + 'px';
+            
+            // 发送消息
+            sendBtn.addEventListener('click', function() {
+                const message = messageInput.value.trim();
+                if (!message) return;
+                
+                // 更新消息内容
+                messageContent.textContent = message;
+                
+                // 显示消息气泡
+                messageBubble.style.opacity = '1';
+                messageContent.style.opacity = '1';
+                
+                // 第一步：移动到发布者中心
+                messageBubble.style.left = (publisherCenter.x - 25) + 'px';
+                messageBubble.style.top = (publisherCenter.y - 25) + 'px';
+                
+                setTimeout(() => {
+                    // 第二步：移动到话题中心
+                    messageBubble.style.left = (topicCenter.x - 25) + 'px';
+                    messageBubble.style.top = (topicCenter.y - 25) + 'px';
+                    
+                    setTimeout(() => {
+                        // 第三步：移动到订阅者中心
+                        messageBubble.style.left = (subscriberCenter.x - 25) + 'px';
+                        messageBubble.style.top = (subscriberCenter.y - 25) + 'px';
+                        
+                        setTimeout(() => {
+                            // 添加到接收消息列表
+                            const now = new Date();
+                            const timeStr = now.getHours().toString().padStart(2, '0') + ':' + 
+                                         now.getMinutes().toString().padStart(2, '0') + ':' + 
+                                         now.getSeconds().toString().padStart(2, '0');
+                            const messageItem = document.createElement('div');
+                            messageItem.className = 'message-item';
+                            messageItem.innerHTML = `[${timeStr}] 收到消息: <span style="color:#ffcc00">${message}</span>`;
+                            
+                            // 移除"等待消息"提示
+                            if (messageList.firstChild.textContent === '等待消息...') {
+                                messageList.innerHTML = '';
+                            }
+                            
+                            messageList.prepend(messageItem);
+                            
+                            // 隐藏消息气泡
+                            messageBubble.style.opacity = '0';
+                            messageContent.style.opacity = '0';
+                            
+                            // 重置位置
+                            setTimeout(() => {
+                                messageBubble.style.left = (publisherCenter.x - 25) + 'px';
+                                messageBubble.style.top = (publisherCenter.y - 25) + 'px';
+                            }, 300);
+                        }, 1000);
+                    }, 1000);
+                }, 100);
+            });
+            
+            // 代码标签切换
+            publisherTab.addEventListener('click', function() {
+                publisherTab.classList.add('active');
+                subscriberTab.classList.remove('active');
+                publisherCode.style.display = 'block';
+                subscriberCode.style.display = 'none';
+            });
+            
+            subscriberTab.addEventListener('click', function() {
+                subscriberTab.classList.add('active');
+                publisherTab.classList.remove('active');
+                publisherCode.style.display = 'none';
+                subscriberCode.style.display = 'block';
+            });
+            
+            // 模拟自动发送
+            setInterval(() => {
+                if (Math.random() > 0.7) {
+                    const messages = [
+                        "传感器数据更新",
+                        "位置: x=1.5, y=2.0",
+                        "电池电量: 85%",
+                        "检测到障碍物",
+                        "任务完成",
+                        "温度: 25.3°C",
+                        "速度: 0.8 m/s",
+                        "状态: 运行中"
+                    ];
+                    const randomMsg = messages[Math.floor(Math.random() * messages.length)];
+                    messageInput.value = randomMsg;
+                    sendBtn.click();
+                }
+            }, 5000);
+            
+            // 添加连接点动画
+            const dots = document.querySelectorAll('.connection-dot');
+            dots.forEach(dot => {
+                dot.style.animation = `pulse ${1 + Math.random() * 2}s infinite`;
+            });
+        });
+    </script>
+</body>
+</html>

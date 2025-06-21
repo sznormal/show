@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>工业机器人仿真技术知识图谱</title>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f5f5f5;
+        }
+        .container {
+            display: flex;
+            height: 100vh;
+            padding: 20px;
+            gap: 20px;
+        }
+        #main {
+            flex: 1;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        #info-panel {
+            width: 300px;
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            overflow-y: auto;
+        }
+        .info-title {
+            font-size: 18px;
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #eee;
+        }
+        .info-content {
+            font-size: 14px;
+            color: #666;
+            line-height: 1.6;
+        }
+        .info-item {
+            margin-bottom: 10px;
+        }
+        .info-label {
+            font-weight: bold;
+            color: #444;
+        }
+        .instruction {
+            margin-top: 20px;
+            padding-top: 15px;
+            border-top: 1px solid #eee;
+            font-size: 13px;
+            color: #888;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div id="main"></div>
+        <div id="info-panel">
+            <div class="info-title">知识点详情</div>
+            <div class="info-content">
+                <div class="instruction">
+                    点击知识图谱中的节点查看详细信息
+                </div>
+            </div>
+        </div>
+    </div>
+    <script>
+        // 知识点详细信息数据
+        const nodeDetails = {
+            'KP_001': {
+                id: 'KP_001',
+                name: '工业机器人仿真技术',
+                type: '概念',
+                description: '利用虚拟现实技术模拟工业机器人在生产制造中的应用，优化工艺流程并降低成本。',
+                importance: '高'
+            },
+            'KP_002': {
+                id: 'KP_002',
+                name: '工业机器人',
+                type: '概念',
+                description: '多关节机械手或多自由度机器装置，具有自动性，可完成工业加工制造功能。',
+                importance: '高'
+            },
+            'KP_003': {
+                id: 'KP_003',
+                name: '仿真技术',
+                type: '概念',
+                description: '通过模型和技术对实际问题进行建模和人工试验，以解决实际问题。',
+                importance: '高'
+            },
+            'KP_004': {
+                id: 'KP_004',
+                name: '工业机器人仿真流程',
+                type: '方法',
+                description: '包括模型导入、轨迹生成、仿真运行、轨迹优化和实机运行的步骤。',
+                importance: '中'
+            },
+            'KP_005': {
+                id: 'KP_005',
+                name: 'InoRobotSim软件',
+                type: '工具',
+                description: '用于工业机器人仿真操作的软件，具备场景搭建、轨迹生成等功能。',
+                importance: '中'
+            },
+            'KP_006': {
+                id: 'KP_006',
+                name: '机器人工作站',
+                type: '概念',
+                description: '以机器人为核心，配备工具、设备等的完整生产单元。',
+                importance: '高'
+            },
+            'KP_007': {
+                id: 'KP_007',
+                name: '工业机器人分类',
+                type: '概念',
+                description: '根据关节个数和构造分为通用六轴机器人和Scara机器人等。',
+                importance: '中'
+            },
+            'KP_008': {
+                id: 'KP_008',
+                name: '机器人运动操作及点位示教',
+                type: '技能',
+                description: '包括平移、旋转、抓取和放开等操作，用于完成机器人任务。',
+                importance: '中'
+            },
+            'KP_009': {
+                id: 'KP_009',
+                name: '三维球工具',
+                type: '工具',
+                description: '用于精确定位三维物体的工具，支持平移、旋转等操作。',
+                importance: '中'
+            },
+            'KP_010': {
+                id: 'KP_010',
+                name: '工业机器人常规搬运仿真应用',
+                type: '应用',
+                description: '利用机器人完成装箱、码垛等搬运任务的仿真应用。',
+                importance: '中'
+            },
+            'KP_011': {
+                id: 'KP_011',
+                name: '外部轴和状态机',
+                type: '概念',
+                description: '扩展机器人工作范围的外部轴和用于控制机器人状态的算法。',
+                importance: '高'
+            },
+            'KP_012': {
+                id: 'KP_012',
+                name: '自动生成轨迹技术',
+                type: '技术',
+                description: '自动计算机器人运动路径的技术，提高效率和精度。',
+                importance: '高'
+            },
+            'KP_013': {
+                id: 'KP_013',
+                name: '焊接工作站仿真',
+                type: '应用',
+                description: '模拟焊接过程，包括机器人、变位机和送丝机构等的协同工作。',
+                importance: '中'
+            }
+        };
+
+        // 更新信息面板的函数
+        function updateInfoPanel(nodeId) {
+            const info = nodeDetails[nodeId];
+            if (!info) return;
+
+            const infoContent = `
+                <div class="info-item">
+                    <span class="info-label">知识点ID：</span>${info.id}
+                </div>
+                <div class="info-item">
+                    <span class="info-label">名称：</span>${info.name}
+                </div>
+                <div class="info-item">
+                    <span class="info-label">类型：</span>${info.type}
+                </div>
+                <div class="info-item">
+                    <span class="info-label">描述：</span>${info.description}
+                </div>
+                <div class="info-item">
+                    <span class="info-label">重要程度：</span>${info.importance}
+                </div>
+            `;
+            
+            document.querySelector('.info-content').innerHTML = infoContent;
+        }
+
+        var chartDom = document.getElementById('main');
+        var myChart = echarts.init(chartDom);
+
+        const categories = [
+            { name: '概念' },
+            { name: '方法' },
+            { name: '工具' },
+            { name: '技能' },
+            { name: '应用' },
+            { name: '技术' }
+        ];
+
+        const data = [
+            { id: 'KP_001', name: '工业机器人仿真技术', symbolSize: 70, category: 0 },
+            { id: 'KP_002', name: '工业机器人', symbolSize: 60, category: 0 },
+            { id: 'KP_003', name: '仿真技术', symbolSize: 60, category: 0 },
+            { id: 'KP_004', name: '工业机器人仿真流程', symbolSize: 50, category: 1 },
+            { id: 'KP_005', name: 'InoRobotSim软件', symbolSize: 50, category: 2 },
+            { id: 'KP_006', name: '机器人工作站', symbolSize: 60, category: 0 },
+            { id: 'KP_007', name: '工业机器人分类', symbolSize: 50, category: 0 },
+            { id: 'KP_008', name: '机器人运动操作及点位示教', symbolSize: 50, category: 3 },
+            { id: 'KP_009', name: '三维球工具', symbolSize: 50, category: 2 },
+            { id: 'KP_010', name: '工业机器人常规搬运仿真应用', symbolSize: 50, category: 4 },
+            { id: 'KP_011', name: '外部轴和状态机', symbolSize: 60, category: 0 },
+            { id: 'KP_012', name: '自动生成轨迹技术', symbolSize: 60, category: 5 },
+            { id: 'KP_013', name: '焊接工作站仿真', symbolSize: 50, category: 4 }
+        ];
+
+        const links = [
+            { source: 'KP_001', target: 'KP_002', value: 'contains' },
+            { source: 'KP_001', target: 'KP_003', value: 'contains' },
+            { source: 'KP_001', target: 'KP_004', value: 'contains' },
+            { source: 'KP_001', target: 'KP_010', value: 'applied_to' },
+            { source: 'KP_001', target: 'KP_013', value: 'applied_to' },
+            { source: 'KP_002', target: 'KP_006', value: 'related_to' },
+            { source: 'KP_002', target: 'KP_007', value: 'related_to' },
+            { source: 'KP_004', target: 'KP_005', value: 'prerequisite_of' },
+            { source: 'KP_005', target: 'KP_009', value: 'applied_to' },
+            { source: 'KP_005', target: 'KP_010', value: 'applied_to' },
+            { source: 'KP_009', target: 'KP_008', value: 'used_in' },
+            { source: 'KP_011', target: 'KP_012', value: 'related_to' },
+            { source: 'KP_012', target: 'KP_004', value: 'derived_from' },
+            { source: 'KP_010', target: 'KP_008', value: 'contains' },
+            { source: 'KP_013', target: 'KP_011', value: 'contains' }
+        ];
+
+        option = {
+            title: {
+                text: '工业机器人仿真技术知识图谱',
+                top: 'top',
+                left: 'center'
+            },
+            tooltip: {
+                trigger: 'item',
+                formatter: function(params) {
+                    if (params.dataType === 'edge') {
+                        return `${params.data.source} ${params.data.value} ${params.data.target}`;
+                    }
+                    return params.data.name;
+                }
+            },
+            legend: {
+                data: categories.map(function(a) {
+                    return a.name;
+                }),
+                top: 'bottom'
+            },
+            animationDurationUpdate: 1500,
+            animationEasingUpdate: 'quinticInOut',
+            series: [
+                {
+                    type: 'graph',
+                    layout: 'force',
+                    data: data,
+                    links: links,
+                    categories: categories,
+                    roam: true,
+                    label: {
+                        show: true,
+                        position: 'right',
+                        formatter: '{b}'
+                    },
+                    labelLayout: {
+                        hideOverlap: true
+                    },
+                    scaleLimit: {
+                        min: 0.4,
+                        max: 2
+                    },
+                    lineStyle: {
+                        color: 'source',
+                        curveness: 0.3
+                    },
+                    emphasis: {
+                        focus: 'adjacency',
+                        lineStyle: {
+                            width: 10
+                        }
+                    },
+                    force: {
+                        repulsion: 1000,
+                        edgeLength: 200
+                    }
+                }
+            ]
+        };
+
+        myChart.setOption(option);
+        
+        // 添加点击事件监听
+        myChart.on('click', function(params) {
+            if (params.dataType === 'node') {
+                updateInfoPanel(params.data.id);
+            }
+        });
+
+        // 响应式调整
+        window.addEventListener('resize', function() {
+            myChart.resize();
+        });
+    </script>
+<script>window.parent.postMessage({ action: "ready" }, "*"); 
+ 
+window.console = new Proxy(console, {
+  get(target, prop) {
+    if (['log', 'warn', 'error'].includes(prop)) {
+      return new Proxy(target[prop], {
+        apply(fn, thisArg, args) {
+          fn.apply(thisArg, args);
+          window.parent.postMessage({ action: 'console', 
+            type: prop, 
+            args: args.map((arg) => {
+              try {
+                return JSON.stringify(arg).replace(/^["']|["']$/g, '');
+              } catch (e) {
+                return arg;
+              }
+            }) 
+          }, '*');
+        }
+      });
+    }
+    return target[prop];
+  }
+});
+</script></body>
+</html>

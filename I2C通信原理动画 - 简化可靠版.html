@@ -1,0 +1,639 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>I2C通信原理演示</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* 基础动画效果 */
+        .highlight {
+            transition: all 0.5s ease;
+        }
+        
+        .highlight-active {
+            fill: #fbbf24 !important;
+            filter: drop-shadow(0 0 8px rgba(251, 191, 36, 0.6));
+        }
+        
+        .signal-line {
+            stroke-dasharray: 10;
+            stroke-dashoffset: 100;
+        }
+        
+        .signal-animate {
+            animation: flowSignal 1.5s linear forwards;
+        }
+        
+        @keyframes flowSignal {
+            to {
+                stroke-dashoffset: 0;
+            }
+        }
+        
+        .bit-hidden {
+            opacity: 0;
+            transform: translateY(20px);
+            transition: all 0.3s ease;
+        }
+        
+        .bit-visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+        
+        .wave {
+            stroke-dasharray: 300;
+            stroke-dashoffset: 300;
+        }
+        
+        .wave-animate {
+            animation: drawWave 2s linear forwards;
+        }
+        
+        @keyframes drawWave {
+            to {
+                stroke-dashoffset: 0;
+            }
+        }
+        
+        /* 调试帮助 */
+        .debug-box {
+            background-color: rgba(255, 255, 255, 0.9);
+            border: 1px solid #ccc;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+            font-family: monospace;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen font-sans">
+    <div class="container mx-auto px-4 py-8">
+        <h1 class="text-3xl font-bold text-center text-blue-700 mb-6">I²C通信原理演示</h1>
+        
+        <div class="bg-white rounded-lg shadow-lg p-6 mb-8">
+            <p class="text-gray-700 mb-4">I²C（Inter-Integrated Circuit）是一种串行通信协议，使用两根线：SCL（串行时钟线）和SDA（串行数据线）连接所有设备。所有设备都并联连接到这两根总线线上。</p>
+        </div>
+
+        <!-- 控制按钮 -->
+        <div class="flex flex-wrap gap-4 justify-center mb-6">
+            <button id="startBtn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg shadow-lg transition-all">
+                开始演示
+            </button>
+            <button id="pauseBtn" class="bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-3 px-6 rounded-lg shadow-lg transition-all" disabled>
+                暂停
+            </button>
+            <button id="resetBtn" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-3 px-6 rounded-lg shadow-lg transition-all">
+                重置
+            </button>
+        </div>
+        
+        <!-- 步骤指示器 -->
+        <div class="bg-white rounded-lg shadow-lg p-6 mb-6">
+            <div class="flex justify-between mb-2">
+                <span class="font-medium text-gray-700">当前步骤:</span>
+                <span id="stepIndicator" class="font-medium text-blue-600">准备就绪</span>
+            </div>
+            <div class="w-full bg-gray-200 rounded-full h-4 mb-4">
+                <div id="progressBar" class="bg-blue-600 h-4 rounded-full w-0 transition-all duration-500"></div>
+            </div>
+            <div id="stepDescription" class="p-4 bg-blue-50 rounded-lg text-gray-800 min-h-[80px]">
+                点击"开始演示"按钮，观看I²C通信过程的动画演示。
+            </div>
+        </div>
+
+        <!-- 调试输出 - 正式版可删除 -->
+        <div id="debugOutput" class="debug-box hidden">
+            动画状态: <span id="debugStatus">未开始</span>
+        </div>
+
+        <!-- 动画区域 -->
+        <div class="bg-white rounded-lg shadow-lg p-6 overflow-x-auto">
+            <svg id="i2cAnimation" width="800" height="500" viewBox="0 0 800 500">
+                <!-- 背景网格 - 帮助可视化，最终可删除 -->
+                <pattern id="smallGrid" width="10" height="10" patternUnits="userSpaceOnUse">
+                    <path d="M 10 0 L 0 0 0 10" fill="none" stroke="rgba(200,200,200,0.2)" stroke-width="0.5"/>
+                </pattern>
+                <rect width="800" height="500" fill="url(#smallGrid)" />
+                
+                <!-- 主设备 -->
+                <g id="masterDevice">
+                    <rect x="100" y="150" width="150" height="100" rx="10" fill="#3b82f6" class="highlight" />
+                    <text x="175" y="200" text-anchor="middle" fill="white" font-size="18" font-weight="bold">主设备</text>
+                </g>
+                
+                <!-- 从设备1 -->
+                <g id="slaveDevice1">
+                    <rect x="550" y="100" width="150" height="80" rx="10" fill="#10b981" class="highlight" />
+                    <text x="625" y="135" text-anchor="middle" fill="white" font-size="16" font-weight="bold">从设备 (0x42)</text>
+                    <text x="625" y="160" text-anchor="middle" fill="white" font-size="12">温度传感器</text>
+                </g>
+                
+                <!-- 从设备2 -->
+                <g id="slaveDevice2">
+                    <rect x="550" y="220" width="150" height="80" rx="10" fill="#8b5cf6" class="highlight" />
+                    <text x="625" y="255" text-anchor="middle" fill="white" font-size="16" font-weight="bold">从设备 (0x44)</text>
+                    <text x="625" y="280" text-anchor="middle" fill="white" font-size="12">EEPROM存储器</text>
+                </g>
+                
+                <!-- I2C总线 -->
+                <!-- SCL总线线 -->
+                <line x1="250" y1="170" x2="550" y2="170" stroke="#374151" stroke-width="6" />
+                <text x="400" y="155" text-anchor="middle" fill="#374151" font-size="16" font-weight="bold">SCL (时钟线)</text>
+                
+                <!-- SDA总线线 -->
+                <line x1="250" y1="230" x2="550" y2="230" stroke="#374151" stroke-width="6" />
+                <text x="400" y="250" text-anchor="middle" fill="#374151" font-size="16" font-weight="bold">SDA (数据线)</text>
+                
+                <!-- 连接线 - 主设备到总线 -->
+                <line x1="250" y1="170" x2="220" y2="170" stroke="#374151" stroke-width="3" />
+                <line x1="250" y1="230" x2="220" y2="230" stroke="#374151" stroke-width="3" />
+                <line x1="220" y1="170" x2="220" y2="230" stroke="#374151" stroke-width="3" />
+                
+                <!-- 连接线 - 总线到从设备1 -->
+                <line x1="550" y1="170" x2="520" y2="170" stroke="#374151" stroke-width="3" />
+                <line x1="520" y1="170" x2="520" y2="140" stroke="#374151" stroke-width="3" />
+                <line x1="520" y1="140" x2="550" y2="140" stroke="#374151" stroke-width="3" />
+                
+                <!-- 连接线 - 总线到从设备1的SDA -->
+                <line x1="550" y1="230" x2="500" y2="230" stroke="#374151" stroke-width="3" />
+                <line x1="500" y1="230" x2="500" y2="160" stroke="#374151" stroke-width="3" />
+                <line x1="500" y1="160" x2="550" y2="160" stroke="#374151" stroke-width="3" />
+                
+                <!-- 连接线 - 总线到从设备2 -->
+                <line x1="550" y1="170" x2="520" y2="170" stroke="#374151" stroke-width="3" />
+                <line x1="520" y1="170" x2="520" y2="240" stroke="#374151" stroke-width="3" />
+                <line x1="520" y1="240" x2="550" y2="240" stroke="#374151" stroke-width="3" />
+                
+                <!-- 连接线 - 总线到从设备2的SDA -->
+                <line x1="550" y1="230" x2="500" y2="230" stroke="#374151" stroke-width="3" />
+                <line x1="500" y1="230" x2="500" y2="260" stroke="#374151" stroke-width="3" />
+                <line x1="500" y1="260" x2="550" y2="260" stroke="#374151" stroke-width="3" />
+                
+                <!-- 信号传输动画元素 -->
+                <!-- SCL信号 -->
+                <path id="sclSignal" d="M 250,170 L 400,170 L 550,170" stroke="#fcd34d" stroke-width="5" fill="none" class="signal-line" opacity="0" />
+                
+                <!-- SDA信号 -->
+                <path id="sdaSignal" d="M 250,230 L 400,230 L 550,230" stroke="#ef4444" stroke-width="5" fill="none" class="signal-line" opacity="0" />
+                
+                <!-- ACK信号 (从从设备返回) -->
+                <path id="ackSignal" d="M 550,230 L 400,230" stroke="#10b981" stroke-width="5" fill="none" class="signal-line" opacity="0" />
+                
+                <!-- 起始/停止信号指示器 -->
+                <circle id="startIndicator" cx="270" cy="230" r="12" fill="#ef4444" opacity="0" />
+                <text id="startLabel" x="270" y="260" text-anchor="middle" fill="#ef4444" font-size="14" font-weight="bold" opacity="0">START</text>
+                
+                <circle id="stopIndicator" cx="530" cy="230" r="12" fill="#ef4444" opacity="0" />
+                <text id="stopLabel" x="530" y="260" text-anchor="middle" fill="#ef4444" font-size="14" font-weight="bold" opacity="0">STOP</text>
+                
+                <!-- 地址和数据位显示 -->
+                <g id="addressBits">
+                    <rect x="300" y="280" width="35" height="35" rx="5" fill="#3b82f6" class="bit-hidden" />
+                    <text x="317.5" y="302" text-anchor="middle" fill="white" font-size="14">0</text>
+                    
+                    <rect x="345" y="280" width="35" height="35" rx="5" fill="#3b82f6" class="bit-hidden" />
+                    <text x="362.5" y="302" text-anchor="middle" fill="white" font-size="14">1</text>
+                    
+                    <rect x="390" y="280" width="35" height="35" rx="5" fill="#3b82f6" class="bit-hidden" />
+                    <text x="407.5" y="302" text-anchor="middle" fill="white" font-size="14">0</text>
+                    
+                    <rect x="435" y="280" width="35" height="35" rx="5" fill="#3b82f6" class="bit-hidden" />
+                    <text x="452.5" y="302" text-anchor="middle" fill="white" font-size="14">0</text>
+                    
+                    <rect x="480" y="280" width="35" height="35" rx="5" fill="#3b82f6" class="bit-hidden" />
+                    <text x="497.5" y="302" text-anchor="middle" fill="white" font-size="14">0</text>
+                    
+                    <rect x="525" y="280" width="35" height="35" rx="5" fill="#3b82f6" class="bit-hidden" />
+                    <text x="542.5" y="302" text-anchor="middle" fill="white" font-size="14">1</text>
+                    
+                    <rect x="570" y="280" width="35" height="35" rx="5" fill="#3b82f6" class="bit-hidden" />
+                    <text x="587.5" y="302" text-anchor="middle" fill="white" font-size="14">0</text>
+                    
+                    <rect x="615" y="280" width="35" height="35" rx="5" fill="#ef4444" class="bit-hidden" />
+                    <text x="632.5" y="302" text-anchor="middle" fill="white" font-size="14">W</text>
+                    
+                    <text x="400" y="335" text-anchor="middle" fill="#3b82f6" font-size="16" font-weight="bold" class="bit-hidden">从设备地址: 0x42 + 写操作(W)</text>
+                </g>
+                
+                <g id="dataBits">
+                    <rect x="300" y="350" width="35" height="35" rx="5" fill="#10b981" class="bit-hidden" />
+                    <text x="317.5" y="372" text-anchor="middle" fill="white" font-size="14">1</text>
+                    
+                    <rect x="345" y="350" width="35" height="35" rx="5" fill="#10b981" class="bit-hidden" />
+                    <text x="362.5" y="372" text-anchor="middle" fill="white" font-size="14">0</text>
+                    
+                    <rect x="390" y="350" width="35" height="35" rx="5" fill="#10b981" class="bit-hidden" />
+                    <text x="407.5" y="372" text-anchor="middle" fill="white" font-size="14">1</text>
+                    
+                    <rect x="435" y="350" width="35" height="35" rx="5" fill="#10b981" class="bit-hidden" />
+                    <text x="452.5" y="372" text-anchor="middle" fill="white" font-size="14">1</text>
+                    
+                    <rect x="480" y="350" width="35" height="35" rx="5" fill="#10b981" class="bit-hidden" />
+                    <text x="497.5" y="372" text-anchor="middle" fill="white" font-size="14">0</text>
+                    
+                    <rect x="525" y="350" width="35" height="35" rx="5" fill="#10b981" class="bit-hidden" />
+                    <text x="542.5" y="372" text-anchor="middle" fill="white" font-size="14">0</text>
+                    
+                    <rect x="570" y="350" width="35" height="35" rx="5" fill="#10b981" class="bit-hidden" />
+                    <text x="587.5" y="372" text-anchor="middle" fill="white" font-size="14">1</text>
+                    
+                    <rect x="615" y="350" width="35" height="35" rx="5" fill="#10b981" class="bit-hidden" />
+                    <text x="632.5" y="372" text-anchor="middle" fill="white" font-size="14">0</text>
+                    
+                    <text x="400" y="405" text-anchor="middle" fill="#10b981" font-size="16" font-weight="bold" class="bit-hidden">数据: 0xB2 (178)</text>
+                </g>
+                
+                <!-- 波形图 -->
+                <g id="waveforms">
+                    <rect x="70" y="430" width="660" height="120" fill="#f8fafc" stroke="#e2e8f0" />
+                    
+                    <!-- SCL波形 -->
+                    <path id="sclWave" d="M 100,460 L 100,480 L 130,480 L 130,460 L 160,460 L 160,480 L 190,480 L 190,460 L 220,460 L 220,480 L 250,480 L 250,460 L 280,460 L 280,480 L 310,480 L 310,460 L 340,460 L 340,480 L 370,480 L 370,460 L 400,460 L 400,480 L 430,480 L 430,460 L 460,460 L 460,480 L 490,480 L 490,460 L 520,460 L 520,480 L 550,480 L 550,460 L 580,460 L 580,480 L 610,480 L 610,460 L 640,460 L 640,480 L 670,480 L 670,460 L 700,460" stroke="#fcd34d" stroke-width="3" fill="none" class="wave" opacity="0" />
+                    
+                    <!-- SDA波形 -->
+                    <path id="sdaWave" d="M 100,510 L 130,510 L 130,530 L 220,530 L 220,510 L 280,510 L 280,530 L 340,530 L 340,510 L 400,510 L 400,530 L 460,530 L 460,510 L 520,510 L 520,530 L 580,530 L 580,510 L 610,510 L 610,530 L 670,530 L 670,510 L 700,510" stroke="#ef4444" stroke-width="3" fill="none" class="wave" opacity="0" />
+                    
+                    <text x="90" y="470" text-anchor="end" fill="#fcd34d" font-size="14" font-weight="bold" opacity="0" id="sclLabel">SCL</text>
+                    <text x="90" y="520" text-anchor="end" fill="#ef4444" font-size="14" font-weight="bold" opacity="0" id="sdaLabel">SDA</text>
+                </g>
+                
+                <!-- 从设备应答提示 -->
+                <g id="ackIndicator">
+                    <circle cx="625" cy="135" r="15" fill="#fcd34d" opacity="0" />
+                    <text x="625" y="140" text-anchor="middle" fill="#000" font-size="14" font-weight="bold" opacity="0">ACK</text>
+                </g>
+            </svg>
+        </div>
+        
+        <!-- I2C总线连接说明 -->
+        <div class="bg-white rounded-lg shadow-lg p-6 mt-8">
+            <h2 class="text-2xl font-semibold text-blue-600 mb-4">I²C总线连接说明</h2>
+            
+            <p class="text-gray-700 mb-4"><strong>I²C是一种总线型连接方式:</strong> 所有设备（主设备和从设备）都并联连接到同一组总线线（SCL和SDA）上。每个设备都同时接收时钟信号和数据信号。</p>
+            
+            <p class="text-gray-700 mb-4"><strong>地址寻址机制:</strong> 每个从设备都有一个唯一的7位地址（如本例中的0x42和0x44）。主设备通过在总线上发送这个地址来选择要通信的特定从设备。</p>
+            
+            <p class="text-gray-700 mb-4"><strong>数据传输:</strong> 只有地址匹配的从设备会响应主设备的命令，其他设备会忽略这次通信。这就是为什么多个设备可以共享同一条总线线路。</p>
+            
+            <div class="mt-6 border-t pt-4">
+                <p class="text-blue-600 font-medium">在动画中:</p>
+                <ul class="list-disc list-inside text-gray-700 space-y-2 mt-2">
+                    <li>主设备同时控制SCL和SDA线</li>
+                    <li>所有从设备都接收到同样的信号</li>
+                    <li>只有地址为0x42的从设备（温度传感器）会响应这次通信</li>
+                    <li>地址为0x44的从设备保持静默，因为地址不匹配</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 全局变量
+        const startBtn = document.getElementById('startBtn');
+        const pauseBtn = document.getElementById('pauseBtn');
+        const resetBtn = document.getElementById('resetBtn');
+        const progressBar = document.getElementById('progressBar');
+        const stepIndicator = document.getElementById('stepIndicator');
+        const stepDescription = document.getElementById('stepDescription');
+        const debugStatus = document.getElementById('debugStatus');
+        
+        // 获取SVG元素
+        const masterDevice = document.getElementById('masterDevice').querySelector('rect');
+        const slaveDevice1 = document.getElementById('slaveDevice1').querySelector('rect');
+        const slaveDevice2 = document.getElementById('slaveDevice2').querySelector('rect');
+        
+        const sclSignal = document.getElementById('sclSignal');
+        const sdaSignal = document.getElementById('sdaSignal');
+        const ackSignal = document.getElementById('ackSignal');
+        
+        const startIndicator = document.getElementById('startIndicator');
+        const startLabel = document.getElementById('startLabel');
+        const stopIndicator = document.getElementById('stopIndicator');
+        const stopLabel = document.getElementById('stopLabel');
+        
+        const sclWave = document.getElementById('sclWave');
+        const sdaWave = document.getElementById('sdaWave');
+        const sclLabel = document.getElementById('sclLabel');
+        const sdaLabel = document.getElementById('sdaLabel');
+        
+        const ackIndicator = document.getElementById('ackIndicator').querySelector('circle');
+        const ackText = document.getElementById('ackIndicator').querySelector('text');
+        
+        const addressBits = Array.from(document.getElementById('addressBits').querySelectorAll('rect'));
+        const addressLabel = document.getElementById('addressBits').querySelector('text:last-of-type');
+        
+        const dataBits = Array.from(document.getElementById('dataBits').querySelectorAll('rect'));
+        const dataLabel = document.getElementById('dataBits').querySelector('text:last-of-type');
+        
+        // 动画状态
+        let animationState = {
+            isPlaying: false,
+            currentStep: 0,
+            timers: []
+        };
+        
+        // 动画步骤
+        const animationSteps = [
+            {
+                name: "准备阶段",
+                progress: 0,
+                description: "I²C通信准备开始。所有设备都连接到同一组SCL和SDA总线线上，处于空闲状态。",
+                action: function() {
+                    updateDebug("执行准备阶段");
+                    
+                    // 显示波形图标签
+                    fadeIn(sclLabel);
+                    fadeIn(sdaLabel);
+                    
+                    // 高亮主设备
+                    masterDevice.classList.add('highlight-active');
+                }
+            },
+            {
+                name: "起始信号(START)",
+                progress: 16,
+                description: "主设备发送起始信号：当SCL保持高电平时，SDA从高电平切换到低电平。这个特殊信号告诉所有连接到总线上的设备，通信即将开始。",
+                action: function() {
+                    updateDebug("执行起始信号步骤");
+                    
+                    // 显示起始信号指示器
+                    fadeIn(startIndicator);
+                    fadeIn(startLabel);
+                    
+                    // 显示SCL信号
+                    fadeIn(sclSignal);
+                    sclSignal.classList.add('signal-animate');
+                    
+                    // 显示波形
+                    fadeIn(sclWave);
+                    fadeIn(sdaWave);
+                    sclWave.classList.add('wave-animate');
+                    sdaWave.classList.add('wave-animate');
+                }
+            },
+            {
+                name: "发送从设备地址",
+                progress: 33,
+                description: "主设备发送7位从设备地址(0x42)和1位读/写位(0=写操作)。每个从设备都会接收到并检查这个地址，只有匹配的设备会继续参与通信。",
+                action: function() {
+                    updateDebug("执行发送地址步骤");
+                    
+                    // 显示SDA信号
+                    fadeIn(sdaSignal);
+                    sdaSignal.classList.add('signal-animate');
+                    
+                    // 依次显示地址位
+                    addressBits.forEach((bit, index) => {
+                        setTimeout(() => {
+                            bit.classList.add('bit-visible');
+                        }, index * 150);
+                    });
+                    
+                    // 显示地址标签
+                    setTimeout(() => {
+                        addressLabel.classList.add('bit-visible');
+                    }, addressBits.length * 150);
+                }
+            },
+            {
+                name: "从设备应答(ACK)",
+                progress: 50,
+                description: "地址匹配的从设备(温度传感器)向主设备发送确认信号(ACK)，表示它已准备好通信。如果总线上没有设备响应(NAK)，主设备可能会终止通信。",
+                action: function() {
+                    updateDebug("执行从设备应答步骤");
+                    
+                    // 高亮选中的从设备
+                    slaveDevice1.classList.add('highlight-active');
+                    
+                    // 显示应答信号
+                    fadeIn(ackSignal);
+                    ackSignal.classList.add('signal-animate');
+                    
+                    // 显示应答指示器
+                    fadeIn(ackIndicator);
+                    fadeIn(ackText);
+                }
+            },
+            {
+                name: "数据传输",
+                progress: 75,
+                description: "主设备向已选中的从设备发送8位数据。在I²C协议中，数据总是以8位为一组传输，每发送完8位后需要接收方给出应答位。",
+                action: function() {
+                    updateDebug("执行数据传输步骤");
+                    
+                    // 依次显示数据位
+                    dataBits.forEach((bit, index) => {
+                        setTimeout(() => {
+                            bit.classList.add('bit-visible');
+                        }, index * 150);
+                    });
+                    
+                    // 显示数据标签
+                    setTimeout(() => {
+                        dataLabel.classList.add('bit-visible');
+                    }, dataBits.length * 150);
+                }
+            },
+            {
+                name: "停止信号(STOP)",
+                progress: 100,
+                description: "主设备发送停止信号：当SCL保持高电平时，SDA从低电平切换到高电平。这表示本次通信完成，总线被释放，可以开始新的通信。",
+                action: function() {
+                    updateDebug("执行停止信号步骤");
+                    
+                    // 显示停止信号指示器
+                    fadeIn(stopIndicator);
+                    fadeIn(stopLabel);
+                    
+                    // 结束通信，取消高亮
+                    setTimeout(() => {
+                        masterDevice.classList.remove('highlight-active');
+                        slaveDevice1.classList.remove('highlight-active');
+                    }, 1500);
+                }
+            }
+        ];
+        
+        // 启动动画
+        function startAnimation() {
+            updateDebug("尝试启动动画");
+            
+            if (animationState.isPlaying) {
+                updateDebug("动画已经在播放中，忽略开始请求");
+                return;
+            }
+            
+            animationState.isPlaying = true;
+            startBtn.disabled = true;
+            pauseBtn.disabled = false;
+            
+            updateDebug("开始执行动画步骤 " + animationState.currentStep);
+            executeStep(animationState.currentStep);
+        }
+        
+        // 执行当前步骤
+        function executeStep(stepIndex) {
+            if (stepIndex >= animationSteps.length) {
+                // 动画完成
+                animationState.isPlaying = false;
+                startBtn.disabled = false;
+                pauseBtn.disabled = true;
+                updateDebug("动画完成");
+                return;
+            }
+            
+            const step = animationSteps[stepIndex];
+            
+            // 更新UI
+            stepIndicator.textContent = step.name;
+            stepDescription.textContent = step.description;
+            progressBar.style.width = step.progress + "%";
+            
+            // 执行步骤操作
+            step.action();
+            
+            // 安排下一步
+            const timer = setTimeout(() => {
+                animationState.currentStep++;
+                executeStep(animationState.currentStep);
+            }, 4000); // 每个步骤4秒
+            
+            animationState.timers.push(timer);
+        }
+        
+        // 暂停动画
+        function pauseAnimation() {
+            if (!animationState.isPlaying) return;
+            
+            animationState.isPlaying = false;
+            startBtn.disabled = false;
+            pauseBtn.disabled = true;
+            
+            // 清除所有计时器
+            animationState.timers.forEach(timer => clearTimeout(timer));
+            animationState.timers = [];
+            
+            updateDebug("动画已暂停");
+        }
+        
+        // 重置动画
+        function resetAnimation() {
+            // 停止任何正在进行的动画
+            pauseAnimation();
+            
+            // 重置状态
+            animationState.currentStep = 0;
+            
+            // 重置UI
+            stepIndicator.textContent = "准备就绪";
+            stepDescription.textContent = "点击"开始演示"按钮，观看I²C通信过程的动画演示。";
+            progressBar.style.width = "0%";
+            
+            // 重置SVG元素状态
+            masterDevice.classList.remove('highlight-active');
+            slaveDevice1.classList.remove('highlight-active');
+            slaveDevice2.classList.remove('highlight-active');
+            
+            sclSignal.classList.remove('signal-animate');
+            sdaSignal.classList.remove('signal-animate');
+            ackSignal.classList.remove('signal-animate');
+            fadeOut(sclSignal);
+            fadeOut(sdaSignal);
+            fadeOut(ackSignal);
+            
+            fadeOut(startIndicator);
+            fadeOut(startLabel);
+            fadeOut(stopIndicator);
+            fadeOut(stopLabel);
+            
+            sclWave.classList.remove('wave-animate');
+            sdaWave.classList.remove('wave-animate');
+            fadeOut(sclWave);
+            fadeOut(sdaWave);
+            fadeOut(sclLabel);
+            fadeOut(sdaLabel);
+            
+            fadeOut(ackIndicator);
+            fadeOut(ackText);
+            
+            // 重置位显示
+            addressBits.forEach(bit => bit.classList.remove('bit-visible'));
+            addressLabel.classList.remove('bit-visible');
+            
+            dataBits.forEach(bit => bit.classList.remove('bit-visible'));
+            dataLabel.classList.remove('bit-visible');
+            
+            updateDebug("动画已重置");
+        }
+        
+        // 辅助函数 - 显示元素
+        function fadeIn(element) {
+            element.style.opacity = 1;
+        }
+        
+        // 辅助函数 - 隐藏元素
+        function fadeOut(element) {
+            element.style.opacity = 0;
+        }
+        
+        // 调试输出
+        function updateDebug(message) {
+            console.log("I2C动画: " + message);
+            if (debugStatus) {
+                debugStatus.textContent = message;
+            }
+        }
+        
+        // 事件监听
+        startBtn.addEventListener('click', function() {
+            console.log("点击了开始按钮");
+            startAnimation();
+        });
+        
+        pauseBtn.addEventListener('click', function() {
+            console.log("点击了暂停按钮");
+            pauseAnimation();
+        });
+        
+        resetBtn.addEventListener('click', function() {
+            console.log("点击了重置按钮");
+            resetAnimation();
+        });
+        
+        // 页面加载时初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log("页面加载完成，初始化动画");
+            resetAnimation();
+            
+            // 显示调试输出（如需调试）
+            // document.getElementById('debugOutput').classList.remove('hidden');
+        });
+    </script>
+<script>window.parent.postMessage({ action: "ready" }, "*"); 
+ 
+window.console = new Proxy(console, {
+  get(target, prop) {
+    if (['log', 'warn', 'error'].includes(prop)) {
+      return new Proxy(target[prop], {
+        apply(fn, thisArg, args) {
+          fn.apply(thisArg, args);
+          window.parent.postMessage({ action: 'console', 
+            type: prop, 
+            args: args.map((arg) => {
+              try {
+                return JSON.stringify(arg).replace(/^["']|["']$/g, '');
+              } catch (e) {
+                return arg;
+              }
+            }) 
+          }, '*');
+        }
+      });
+    }
+    return target[prop];
+  }
+});
+</script></body>
+</html>

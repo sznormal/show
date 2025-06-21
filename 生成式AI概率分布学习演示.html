@@ -1,0 +1,403 @@
+
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>生成式AI：从学习到创造</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .data-point {
+            transition: all 0.5s ease-in-out;
+        }
+        .curve-path {
+            transition: all 1s ease-in-out;
+        }
+        .generated-point {
+            animation: fadeInDrop 1s ease-out forwards;
+        }
+        @keyframes fadeInDrop {
+            0% { opacity: 0; transform: translateY(-20px); }
+            100% { opacity: 1; transform: translateY(0); }
+        }
+        .explanation-text {
+            transition: opacity 0.3s ease-in-out;
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-blue-50 to-indigo-100 min-h-screen p-4">
+    <div class="max-w-6xl mx-auto">
+        <!-- 标题区域 -->
+        <div class="text-center mb-8">
+            <h1 class="text-4xl font-bold text-gray-800 mb-4">生成式人工智能原理演示</h1>
+            <p class="text-lg text-gray-600 mb-2">理解AI如何从数据学习到内容生成</p>
+            <p class="text-md text-gray-500">适用于中职教师教学参考</p>
+        </div>
+
+        <!-- 主要内容区域 -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <!-- 控制面板 -->
+            <div class="lg:col-span-1">
+                <div class="bg-white rounded-lg shadow-lg p-6">
+                    <h3 class="text-xl font-semibold mb-4 text-gray-800">控制面板</h3>
+                    
+                    <!-- 阶段选择 -->
+                    <div class="mb-6">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">选择演示阶段</label>
+                        <div class="space-y-2">
+                            <button id="learnBtn" class="w-full bg-blue-500 hover:bg-blue-600 text-white font-medium py-2 px-4 rounded transition-colors">
+                                🧠 学习阶段
+                            </button>
+                            <button id="generateBtn" class="w-full bg-green-500 hover:bg-green-600 text-white font-medium py-2 px-4 rounded transition-colors">
+                                ✨ 生成阶段
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- 速度控制 -->
+                    <div class="mb-6">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">动画速度</label>
+                        <input type="range" id="speedSlider" min="0.5" max="3" step="0.5" value="1" 
+                               class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer">
+                        <div class="flex justify-between text-xs text-gray-500 mt-1">
+                            <span>慢</span>
+                            <span>快</span>
+                        </div>
+                    </div>
+
+                    <!-- 重置按钮 -->
+                    <button id="resetBtn" class="w-full bg-gray-500 hover:bg-gray-600 text-white font-medium py-2 px-4 rounded transition-colors">
+                        🔄 重置演示
+                    </button>
+
+                    <!-- 状态显示 -->
+                    <div class="mt-6 p-3 bg-gray-50 rounded">
+                        <p class="text-sm text-gray-600">
+                            <strong>当前状态：</strong>
+                            <span id="currentStatus">等待开始</span>
+                        </p>
+                    </div>
+                </div>
+
+                <!-- 教学要点 -->
+                <div class="bg-white rounded-lg shadow-lg p-6 mt-6">
+                    <h3 class="text-xl font-semibold mb-4 text-gray-800">💡 教学要点</h3>
+                    <div class="space-y-3 text-sm text-gray-600">
+                        <div class="p-3 bg-blue-50 rounded">
+                            <strong>学习阶段：</strong>AI通过分析大量训练数据，学习数据的内在规律和概率分布模式
+                        </div>
+                        <div class="p-3 bg-green-50 rounded">
+                            <strong>生成阶段：</strong>基于学习到的分布，AI可以"采样"生成新的、原创的内容
+                        </div>
+                        <div class="p-3 bg-yellow-50 rounded">
+                            <strong>关键概念：</strong>生成式AI的本质是概率建模，而非简单的复制粘贴
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 可视化区域 -->
+            <div class="lg:col-span-2">
+                <div class="bg-white rounded-lg shadow-lg p-6">
+                    <h3 class="text-xl font-semibold mb-4 text-gray-800">可视化演示</h3>
+                    
+                    <!-- SVG图表 -->
+                    <svg id="chartSvg" viewBox="0 0 600 400" class="w-full h-auto border rounded">
+                        <!-- 背景网格 -->
+                        <defs>
+                            <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse">
+                                <path d="M 20 0 L 0 0 0 20" fill="none" stroke="#f0f0f0" stroke-width="1"/>
+                            </pattern>
+                        </defs>
+                        <rect width="100%" height="100%" fill="url(#grid)" />
+                        
+                        <!-- 坐标轴 -->
+                        <g id="axes">
+                            <!-- X轴 -->
+                            <line x1="80" y1="320" x2="550" y1="320" stroke="#333" stroke-width="2"/>
+                            <text x="315" y="350" text-anchor="middle" class="text-sm fill-gray-700">数据特征维度</text>
+                            
+                            <!-- Y轴 -->
+                            <line x1="80" y1="320" x2="80" y2="80" stroke="#333" stroke-width="2"/>
+                            <text x="25" y="200" text-anchor="middle" class="text-sm fill-gray-700" transform="rotate(-90, 25, 200)">概率密度</text>
+                            
+                            <!-- 刻度 -->
+                            <g class="text-xs fill-gray-600">
+                                <text x="150" y="335" text-anchor="middle">低</text>
+                                <text x="315" y="335" text-anchor="middle">中</text>
+                                <text x="480" y="335" text-anchor="middle">高</text>
+                                <text x="70" y="280" text-anchor="end">低</text>
+                                <text x="70" y="200" text-anchor="end">中</text>
+                                <text x="70" y="120" text-anchor="end">高</text>
+                            </g>
+                        </g>
+                        
+                        <!-- 概率分布曲线 -->
+                        <path id="distributionCurve" d="M 80,320 L 550,320" stroke="#333" stroke-width="3" fill="none" class="curve-path"/>
+                        
+                        <!-- 数据点容器 -->
+                        <g id="dataPoints"></g>
+                        <g id="generatedPoints"></g>
+                    </svg>
+
+                    <!-- 说明文字 -->
+                    <div class="mt-4 p-4 bg-gray-50 rounded">
+                        <div id="explanationText" class="explanation-text">
+                            <h4 class="font-semibold text-gray-800 mb-2">演示说明</h4>
+                            <p class="text-gray-600 text-sm leading-relaxed">
+                                点击上方按钮开始演示。蓝色圆点代表训练数据，黑色曲线代表学习到的概率分布，红色圆点代表生成的新样本。
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 底部教学建议 -->
+        <div class="mt-8 bg-white rounded-lg shadow-lg p-6">
+            <h3 class="text-xl font-semibold mb-4 text-gray-800">🎓 教学建议</h3>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 text-sm text-gray-600">
+                <div>
+                    <h4 class="font-semibold text-gray-800 mb-2">课堂互动</h4>
+                    <ul class="space-y-1 list-disc list-inside">
+                        <li>让学生预测不同数据分布下会生成什么样的新样本</li>
+                        <li>讨论为什么AI生成的内容既新颖又合理</li>
+                        <li>对比传统程序与AI生成程序的区别</li>
+                    </ul>
+                </div>
+                <div>
+                    <h4 class="font-semibold text-gray-800 mb-2">拓展思考</h4>
+                    <ul class="space-y-1 list-disc list-inside">
+                        <li>讨论AI创作的版权问题</li>
+                        <li>探讨AI在不同行业的应用前景</li>
+                        <li>思考如何与AI协作提高工作效率</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        class GenerativeAIDemo {
+            constructor() {
+                this.currentPhase = 'waiting';
+                this.animationSpeed = 1;
+                this.dataPoints = [];
+                this.generatedPoints = [];
+                this.isAnimating = false;
+                
+                this.initializeElements();
+                this.bindEvents();
+                this.generateSampleData();
+            }
+
+            initializeElements() {
+                this.learnBtn = document.getElementById('learnBtn');
+                this.generateBtn = document.getElementById('generateBtn');
+                this.resetBtn = document.getElementById('resetBtn');
+                this.speedSlider = document.getElementById('speedSlider');
+                this.statusText = document.getElementById('currentStatus');
+                this.explanationText = document.getElementById('explanationText');
+                this.svg = document.getElementById('chartSvg');
+                this.curve = document.getElementById('distributionCurve');
+                this.dataPointsGroup = document.getElementById('dataPoints');
+                this.generatedPointsGroup = document.getElementById('generatedPoints');
+            }
+
+            bindEvents() {
+                this.learnBtn.addEventListener('click', () => this.startLearningPhase());
+                this.generateBtn.addEventListener('click', () => this.startGeneratingPhase());
+                this.resetBtn.addEventListener('click', () => this.reset());
+                this.speedSlider.addEventListener('input', (e) => {
+                    this.animationSpeed = parseFloat(e.target.value);
+                });
+            }
+
+            generateSampleData() {
+                // 生成正态分布样的训练数据
+                this.dataPoints = [];
+                const centerX = 315;
+                const centerY = 200;
+                
+                for (let i = 0; i < 20; i++) {
+                    const angle = (Math.random() * 2 - 1) * Math.PI;
+                    const radius = Math.random() * 80 + 40;
+                    const x = centerX + Math.cos(angle) * radius;
+                    const y = centerY + Math.sin(angle) * radius * 0.3;
+                    
+                    this.dataPoints.push({
+                        x: Math.max(100, Math.min(500, x)),
+                        y: Math.max(120, Math.min(300, y))
+                    });
+                }
+            }
+
+            async startLearningPhase() {
+                if (this.isAnimating) return;
+                
+                this.isAnimating = true;
+                this.currentPhase = 'learning';
+                this.updateStatus('正在学习数据分布...');
+                this.updateExplanation('学习阶段', 'AI正在分析训练数据，识别数据的分布模式和规律。蓝色点代表原始训练数据，黑色曲线逐渐拟合数据分布。');
+                
+                // 清空之前的点
+                this.dataPointsGroup.innerHTML = '';
+                this.generatedPointsGroup.innerHTML = '';
+                
+                // 重置曲线为直线
+                this.curve.setAttribute('d', 'M 80,320 L 550,320');
+                
+                // 逐个显示训练数据点
+                for (let i = 0; i < this.dataPoints.length; i++) {
+                    await this.sleep(300 / this.animationSpeed);
+                    this.createDataPoint(this.dataPoints[i], i);
+                }
+                
+                // 拟合分布曲线
+                await this.sleep(500 / this.animationSpeed);
+                await this.fitDistributionCurve();
+                
+                this.updateStatus('学习完成！已掌握数据分布规律');
+                this.isAnimating = false;
+            }
+
+            async startGeneratingPhase() {
+                if (this.isAnimating) return;
+                if (this.currentPhase !== 'learning' && this.dataPointsGroup.children.length === 0) {
+                    alert('请先完成学习阶段！');
+                    return;
+                }
+                
+                this.isAnimating = true;
+                this.currentPhase = 'generating';
+                this.updateStatus('正在生成新样本...');
+                this.updateExplanation('生成阶段', 'AI基于学习到的概率分布生成新的样本。红色点代表新生成的内容，它们符合原始数据的分布规律，但又是全新的。');
+                
+                // 清空之前生成的点
+                this.generatedPointsGroup.innerHTML = '';
+                
+                // 生成新样本
+                for (let i = 0; i < 10; i++) {
+                    await this.sleep(400 / this.animationSpeed);
+                    this.generateNewSample(i);
+                }
+                
+                this.updateStatus('生成完成！创造了新的内容');
+                this.isAnimating = false;
+            }
+
+            async fitDistributionCurve() {
+                // 创建平滑的正态分布曲线
+                const points = [];
+                for (let x = 80; x <= 550; x += 10) {
+                    const normalizedX = (x - 315) / 100;
+                    const y = 320 - 120 * Math.exp(-0.5 * normalizedX * normalizedX);
+                    points.push(`${x},${y}`);
+                }
+                
+                const pathData = `M ${points.join(' L ')}`;
+                this.curve.setAttribute('d', pathData);
+            }
+
+            createDataPoint(point, index) {
+                const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                circle.setAttribute('cx', point.x);
+                circle.setAttribute('cy', point.y);
+                circle.setAttribute('r', 5);
+                circle.setAttribute('fill', '#3B82F6');
+                circle.setAttribute('stroke', '#1E40AF');
+                circle.setAttribute('stroke-width', 2);
+                circle.setAttribute('class', 'data-point');
+                circle.style.opacity = '0';
+                
+                this.dataPointsGroup.appendChild(circle);
+                
+                // 动画显示
+                setTimeout(() => {
+                    circle.style.opacity = '1';
+                }, 50);
+            }
+
+            generateNewSample(index) {
+                // 基于分布生成新样本
+                const centerX = 315 + (Math.random() - 0.5) * 200;
+                const normalizedX = (centerX - 315) / 100;
+                const baseY = 320 - 120 * Math.exp(-0.5 * normalizedX * normalizedX);
+                const y = baseY + (Math.random() - 0.5) * 40;
+                
+                const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                circle.setAttribute('cx', centerX);
+                circle.setAttribute('cy', y);
+                circle.setAttribute('r', 5);
+                circle.setAttribute('fill', '#EF4444');
+                circle.setAttribute('stroke', '#DC2626');
+                circle.setAttribute('stroke-width', 2);
+                circle.setAttribute('class', 'generated-point');
+                
+                this.generatedPointsGroup.appendChild(circle);
+            }
+
+            reset() {
+                this.isAnimating = false;
+                this.currentPhase = 'waiting';
+                this.updateStatus('等待开始');
+                this.updateExplanation('演示说明', '点击上方按钮开始演示。蓝色圆点代表训练数据，黑色曲线代表学习到的概率分布，红色圆点代表生成的新样本。');
+                
+                // 清空所有点
+                this.dataPointsGroup.innerHTML = '';
+                this.generatedPointsGroup.innerHTML = '';
+                
+                // 重置曲线
+                this.curve.setAttribute('d', 'M 80,320 L 550,320');
+                
+                // 重新生成训练数据
+                this.generateSampleData();
+            }
+
+            updateStatus(status) {
+                this.statusText.textContent = status;
+            }
+
+            updateExplanation(title, content) {
+                this.explanationText.innerHTML = `
+                    <h4 class="font-semibold text-gray-800 mb-2">${title}</h4>
+                    <p class="text-gray-600 text-sm leading-relaxed">${content}</p>
+                `;
+            }
+
+            sleep(ms) {
+                return new Promise(resolve => setTimeout(resolve, ms));
+            }
+        }
+
+        // 初始化演示
+        document.addEventListener('DOMContentLoaded', () => {
+            new GenerativeAIDemo();
+        });
+    </script>
+<script>window.parent.postMessage({ action: "ready" }, "*"); 
+ 
+window.console = new Proxy(console, {
+  get(target, prop) {
+    if (['log', 'warn', 'error'].includes(prop)) {
+      return new Proxy(target[prop], {
+        apply(fn, thisArg, args) {
+          fn.apply(thisArg, args);
+          window.parent.postMessage({ action: 'console', 
+            type: prop, 
+            args: args.map((arg) => {
+              try {
+                return JSON.stringify(arg).replace(/^["']|["']$/g, '');
+              } catch (e) {
+                return arg;
+              }
+            }) 
+          }, '*');
+        }
+      });
+    }
+    return target[prop];
+  }
+});
+</script></body>
+</html>

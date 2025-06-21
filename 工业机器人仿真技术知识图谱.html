@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>工业机器人仿真技术知识图谱</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+</head>
+<body class="bg-gray-100">
+    <div class="container mx-auto px-4 py-8">
+        <div class="bg-white rounded-lg shadow-lg p-6 mb-6">
+            <h1 class="text-2xl font-bold mb-4">工业机器人仿真技术知识图谱</h1>
+            <div class="flex gap-4 mb-4">
+                <div class="flex items-center">
+                    <span class="w-4 h-4 bg-blue-500 rounded-full mr-2"></span>
+                    <span>概念</span>
+                </div>
+                <div class="flex items-center">
+                    <span class="w-4 h-4 bg-green-500 rounded-full mr-2"></span>
+                    <span>方法</span>
+                </div>
+                <div class="flex items-center">
+                    <span class="w-4 h-4 bg-yellow-500 rounded-full mr-2"></span>
+                    <span>工具</span>
+                </div>
+                <div class="flex items-center">
+                    <span class="w-4 h-4 bg-red-500 rounded-full mr-2"></span>
+                    <span>应用</span>
+                </div>
+            </div>
+        </div>
+        <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
+            <div class="lg:col-span-3">
+                <div id="graph" class="bg-white rounded-lg shadow-lg" style="height: 800px;"></div>
+            </div>
+            <div class="lg:col-span-1">
+                <div id="info-panel" class="bg-white rounded-lg shadow-lg p-6">
+                    <h2 class="text-xl font-bold mb-4">节点信息</h2>
+                    <p class="text-gray-600">点击节点查看详细信息</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const nodes = [
+            { id: 'KP_001', name: '工业机器人仿真技术', category: 0, symbolSize: 60, value: '高' },
+            { id: 'KP_002', name: '工业机器人', category: 0, symbolSize: 50, value: '高' },
+            { id: 'KP_003', name: '仿真技术', category: 0, symbolSize: 50, value: '高' },
+            { id: 'KP_004', name: '工业机器人仿真流程', category: 1, symbolSize: 40, value: '中' },
+            { id: 'KP_005', name: 'InoRobotSim软件', category: 2, symbolSize: 40, value: '中' },
+            { id: 'KP_006', name: '机器人工作站', category: 0, symbolSize: 50, value: '高' },
+            { id: 'KP_007', name: '工业机器人分类', category: 0, symbolSize: 40, value: '中' },
+            { id: 'KP_008', name: '机器人运动操作及点位示教', category: 1, symbolSize: 40, value: '中' },
+            { id: 'KP_009', name: '三维球工具', category: 2, symbolSize: 30, value: '中' },
+            { id: 'KP_010', name: '工业机器人常规搬运仿真应用', category: 3, symbolSize: 40, value: '中' },
+            { id: 'KP_011', name: '外部轴和状态机', category: 0, symbolSize: 50, value: '高' },
+            { id: 'KP_012', name: '自动生成轨迹技术', category: 1, symbolSize: 50, value: '高' },
+            { id: 'KP_013', name: '焊接工作站仿真', category: 3, symbolSize: 40, value: '中' }
+        ];
+
+        const links = [
+            { source: 'KP_001', target: 'KP_002', value: 'contains' },
+            { source: 'KP_001', target: 'KP_003', value: 'contains' },
+            { source: 'KP_001', target: 'KP_004', value: 'contains' },
+            { source: 'KP_001', target: 'KP_010', value: 'applied_to' },
+            { source: 'KP_001', target: 'KP_013', value: 'applied_to' },
+            { source: 'KP_002', target: 'KP_006', value: 'related_to' },
+            { source: 'KP_002', target: 'KP_007', value: 'related_to' },
+            { source: 'KP_004', target: 'KP_005', value: 'prerequisite_of' },
+            { source: 'KP_005', target: 'KP_009', value: 'applied_to' },
+            { source: 'KP_005', target: 'KP_010', value: 'applied_to' },
+            { source: 'KP_009', target: 'KP_008', value: 'used_in' },
+            { source: 'KP_011', target: 'KP_012', value: 'related_to' },
+            { source: 'KP_012', target: 'KP_004', value: 'derived_from' },
+            { source: 'KP_010', target: 'KP_008', value: 'contains' },
+            { source: 'KP_013', target: 'KP_011', value: 'contains' }
+        ];
+
+        const descriptions = {
+            'KP_001': '利用虚拟现实技术模拟工业机器人在生产制造中的应用，优化工艺流程并降低成本。',
+            'KP_002': '多关节机械手或多自由度机器装置，具有自动性，可完成工业加工制造功能。',
+            'KP_003': '通过模型和技术对实际问题进行建模和人工试验，以解决实际问题。',
+            'KP_004': '包括模型导入、轨迹生成、仿真运行、轨迹优化和实机运行的步骤。',
+            'KP_005': '用于工业机器人仿真操作的软件，具备场景搭建、轨迹生成等功能。',
+            'KP_006': '以机器人为核心，配备工具、设备等的完整生产单元。',
+            'KP_007': '根据关节个数和构造分为通用六轴机器人和Scara机器人等。',
+            'KP_008': '包括平移、旋转、抓取和放开等操作，用于完成机器人任务。',
+            'KP_009': '用于精确定位三维物体的工具，支持平移、旋转等操作。',
+            'KP_010': '利用机器人完成装箱、码垛等搬运任务的仿真应用。',
+            'KP_011': '扩展机器人工作范围的外部轴和用于控制机器人状态的算法。',
+            'KP_012': '自动计算机器人运动路径的技术，提高效率和精度。',
+            'KP_013': '模拟焊接过程，包括机器人、变位机和送丝机构等的协同工作。'
+        };
+
+        const chart = echarts.init(document.getElementById('graph'));
+        const infoPanel = document.getElementById('info-panel');
+
+        const option = {
+            tooltip: {
+                show: true,
+                formatter: function(params) {
+                    if (params.dataType === 'node') {
+                        return `${params.data.name}<br/>重要程度: ${params.data.value}`;
+                    } else {
+                        return `关系: ${params.data.value}`;
+                    }
+                }
+            },
+            legend: {
+                data: ['概念', '方法', '工具', '应用']
+            },
+            series: [{
+                type: 'graph',
+                layout: 'force',
+                data: nodes,
+                links: links,
+                categories: [
+                    { name: '概念' },
+                    { name: '方法' },
+                    { name: '工具' },
+                    { name: '应用' }
+                ],
+                roam: true,
+                label: {
+                    show: true,
+                    position: 'right',
+                    formatter: '{b}'
+                },
+                force: {
+                    repulsion: 1000,
+                    edgeLength: 200
+                },
+                itemStyle: {
+                    normal: {
+                        color: function(params) {
+                            const colors = ['#3b82f6', '#22c55e', '#eab308', '#ef4444'];
+                            return colors[params.data.category];
+                        }
+                    }
+                },
+                lineStyle: {
+                    color: '#999',
+                    curveness: 0.3
+                },
+                emphasis: {
+                    focus: 'adjacency'
+                }
+            }]
+        };
+
+        chart.setOption(option);
+
+        chart.on('click', function(params) {
+            if (params.dataType === 'node') {
+                const node = params.data;
+                infoPanel.innerHTML = `
+                    <h2 class="text-xl font-bold mb-4">${node.name}</h2>
+                    <div class="mb-4">
+                        <span class="font-semibold">ID:</span> ${node.id}
+                    </div>
+                    <div class="mb-4">
+                        <span class="font-semibold">重要程度:</span> ${node.value}
+                    </div>
+                    <div class="mb-4">
+                        <span class="font-semibold">描述:</span>
+                        <p class="mt-2">${descriptions[node.id]}</p>
+                    </div>
+                `;
+            }
+        });
+
+        window.addEventListener('resize', function() {
+            chart.resize();
+        });
+    </script>
+<script>window.parent.postMessage({ action: "ready" }, "*"); 
+ 
+window.console = new Proxy(console, {
+  get(target, prop) {
+    if (['log', 'warn', 'error'].includes(prop)) {
+      return new Proxy(target[prop], {
+        apply(fn, thisArg, args) {
+          fn.apply(thisArg, args);
+          window.parent.postMessage({ action: 'console', 
+            type: prop, 
+            args: args.map((arg) => {
+              try {
+                return JSON.stringify(arg).replace(/^["']|["']$/g, '');
+              } catch (e) {
+                return arg;
+              }
+            }) 
+          }, '*');
+        }
+      });
+    }
+    return target[prop];
+  }
+});
+</script></body>
+</html>

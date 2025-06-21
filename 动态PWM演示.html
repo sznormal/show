@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <title>动态PWM演示</title>
+</head>
+<body class="bg-gray-100 p-8">
+<div class="max-w-4xl mx-auto bg-white rounded-xl shadow-lg p-6">
+    <h1 class="text-2xl font-bold mb-6 text-blue-600">动态PWM演示</h1>
+    
+    <div class="flex gap-8">
+        <!-- 波形展示区 -->
+        <div class="flex-1 relative h-64 bg-gray-50 rounded-lg p-4">
+            <svg class="w-full h-full" viewBox="0 0 400 200">
+                <path d="M20 180 L380 180" stroke="#ccc" stroke-width="1"/>
+                <path d="M20 20 L20 180" stroke="#ccc" stroke-width="1"/>
+                <path id="pwm-wave" stroke="#3B82F6" stroke-width="2" fill="none"/>
+                <path id="avg-line" stroke-dasharray="4" stroke="#EF4444" stroke-width="2"/>
+            </svg>
+            <div id="energy-bar" class="absolute bottom-0 left-0 h-0 w-full bg-green-200 transition-all duration-300"></div>
+        </div>
+
+        <!-- 控制面板 -->
+        <div class="w-48 space-y-6">
+            <div>
+                <label class="block text-sm font-medium mb-2">占空比: <span id="duty-value">50</span>%</label>
+                <input type="range" min="0" max="100" value="50" 
+                       class="w-full range range-primary" 
+                       id="duty-slider">
+            </div>
+            
+            <div class="relative w-32 h-32">
+                <svg viewBox="0 0 100 100">
+                    <circle cx="50" cy="50" r="45" class="fill-none stroke-red-500 opacity-20" stroke-width="8"/>
+                    <path id="meter-arc" d="M20 50 A30 30 0 0 1 80 50" 
+                          class="fill-none stroke-red-500" stroke-width="8" stroke-linecap="round"/>
+                    <path id="meter-pointer" d="M50 20 L50 40 L54 36 L50 40 L46 36" 
+                          class="fill-red-500" transform="rotate(0 50 50)"/>
+                </svg>
+            </div>
+        </div>
+    </div>
+
+    <!-- 时间轴 -->
+    <div class="mt-6 h-2 bg-gray-200 rounded-full relative">
+        <div id="timeline-progress" class="h-full bg-blue-500 rounded-full w-0 transition-all duration-300"></div>
+    </div>
+
+    <!-- 控制按钮 -->
+    <div class="fixed bottom-8 right-8">
+        <button id="animate-btn" class="bg-blue-500 text-white px-6 py-3 rounded-full shadow-lg hover:bg-blue-600 transition">
+            开始动画
+        </button>
+    </div>
+</div>
+
+<script>
+const slider = document.getElementById('duty-slider');
+const wavePath = document.getElementById('pwm-wave');
+const avgLine = document.getElementById('avg-line');
+const meterPointer = document.getElementById('meter-pointer');
+const energyBar = document.getElementById('energy-bar');
+const animateBtn = document.getElementById('animate-btn');
+const timeline = document.getElementById('timeline-progress');
+
+let isAnimating = false;
+let startTime = null;
+const cycleDuration = 4000; // 4秒周期
+
+function updateWave(dutyCycle) {
+    const period = 400;
+    const amplitude = 160;
+    const highWidth = period * (dutyCycle / 100);
+    const lowWidth = period - highWidth;
+    
+    const d = `M20 180 V20 H${20 + highWidth} V180 H${20 + highWidth + lowWidth}`;
+    wavePath.setAttribute('d', d);
+    
+    const avgVoltage = 180 - (amplitude * (dutyCycle / 100));
+    avgLine.setAttribute('d', `M20 ${avgVoltage} L380 ${avgVoltage}`);
+    
+    const angle = 180 * (dutyCycle / 100);
+    meterPointer.setAttribute('transform', `rotate(${angle} 50 50)`);
+    
+    energyBar.style.height = `${dutyCycle}%`;
+}
+
+function animate(timestamp) {
+    if (!startTime) startTime = timestamp;
+    const elapsed = timestamp - startTime;
+    const progress = (elapsed % cycleDuration) / cycleDuration;
+
+    // 正弦波变化（可改为线性）
+    const duty = Math.round(50 + 50 * Math.sin(progress * 2 * Math.PI));
+    slider.value = duty;
+    document.getElementById('duty-value').textContent = duty;
+    updateWave(duty);
+
+    timeline.style.width = `${progress * 100}%`;
+
+    if (isAnimating) {
+        requestAnimationFrame(animate);
+    }
+}
+
+animateBtn.addEventListener('click', () => {
+    isAnimating = !isAnimating;
+    animateBtn.textContent = isAnimating ? '停止动画' : '开始动画';
+    if (isAnimating) {
+        startTime = null;
+        requestAnimationFrame(animate);
+    }
+});
+
+slider.addEventListener('input', (e) => {
+    if (isAnimating) {
+        isAnimating = false;
+        animateBtn.textContent = '开始动画';
+    }
+    const value = e.target.value;
+    document.getElementById('duty-value').textContent = value;
+    updateWave(value);
+});
+
+updateWave(50);
+</script>
+<script>window.parent.postMessage({ action: "ready" }, "*"); 
+ 
+window.console = new Proxy(console, {
+  get(target, prop) {
+    if (['log', 'warn', 'error'].includes(prop)) {
+      return new Proxy(target[prop], {
+        apply(fn, thisArg, args) {
+          fn.apply(thisArg, args);
+          window.parent.postMessage({ action: 'console', 
+            type: prop, 
+            args: args.map((arg) => {
+              try {
+                return JSON.stringify(arg).replace(/^["']|["']$/g, '');
+              } catch (e) {
+                return arg;
+              }
+            }) 
+          }, '*');
+        }
+      });
+    }
+    return target[prop];
+  }
+});
+</script></body>
+</html>

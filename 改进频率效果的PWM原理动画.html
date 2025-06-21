@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PWM 原理动画展示</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .pwm-wave {
+            stroke-width: 2;
+            stroke: #3b82f6;
+            fill: none;
+        }
+        .avg-line {
+            stroke-width: 2;
+            stroke: #ef4444;
+            stroke-dasharray: 5 5;
+        }
+        .axis {
+            stroke: #000;
+            stroke-width: 1;
+        }
+        .motor {
+            animation-name: rotate;
+            animation-timing-function: linear;
+            animation-iteration-count: infinite;
+            transform-origin: center;
+        }
+        @keyframes rotate {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        .led {
+            transition: fill 0.3s ease;
+        }
+        .led-glow {
+            filter: drop-shadow(0 0 8px rgba(255, 255, 0, var(--glow-intensity)));
+            transition: filter 0.3s ease;
+        }
+        .grid-line {
+            stroke: #e5e7eb;
+            stroke-width: 1;
+        }
+        .period-indicator {
+            stroke: rgba(107, 114, 128, 0.5);
+            stroke-width: 1;
+            stroke-dasharray: 3 3;
+        }
+        .frequency-visualizer {
+            height: 30px;
+            background: linear-gradient(90deg, #f0f9ff 0%, #3b82f6 100%);
+            border-radius: 4px;
+            overflow: hidden;
+            position: relative;
+        }
+        .frequency-marker {
+            position: absolute;
+            top: 0;
+            width: 2px;
+            height: 100%;
+            background-color: #1e40af;
+        }
+        .frequency-pulse {
+            position: absolute;
+            top: 0;
+            left: 0;
+            height: 100%;
+            width: 10px;
+            background-color: rgba(29, 78, 216, 0.4);
+            transform-origin: left;
+            animation-name: pulse-right;
+            animation-timing-function: linear;
+            animation-iteration-count: infinite;
+        }
+        @keyframes pulse-right {
+            0% { transform: scaleX(0); }
+            20% { transform: scaleX(1); }
+            100% { transform: scaleX(0); }
+        }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen flex flex-col items-center p-4">
+    <div class="container max-w-4xl bg-white p-6 rounded-lg shadow-md">
+        <h1 class="text-2xl font-bold text-center mb-6">PWM 脉冲宽度调制原理动画</h1>
+        
+        <div class="mb-8">
+            <h2 class="text-xl font-semibold mb-3">什么是 PWM？</h2>
+            <p class="mb-4">PWM (脉冲宽度调制) 是一种通过改变脉冲信号的占空比来控制电路中平均功率的技术。通过调整方波信号的"开启"时间与总周期时间的比例（称为占空比），可以控制输出的平均电压。</p>
+        </div>
+
+        <div class="mb-8">
+            <h2 class="text-xl font-semibold mb-3">PWM 基本波形</h2>
+            <div class="flex flex-col items-center">
+                <div class="relative w-full h-[200px] border border-gray-300 bg-gray-50 rounded mb-4">
+                    <svg id="pwmWave" width="100%" height="100%" viewBox="0 0 600 200">
+                        <!-- 网格线 -->
+                        <g id="gridLines">
+                            <!-- 横向网格线将由JS生成 -->
+                            <!-- 纵向网格线将由JS生成 -->
+                        </g>
+                        
+                        <!-- 坐标轴 -->
+                        <line x1="30" y1="150" x2="570" y2="150" class="axis" />
+                        <line x1="30" y1="30" x2="30" y2="150" class="axis" />
+                        
+                        <!-- 标签 -->
+                        <text x="300" y="190" text-anchor="middle" class="text-sm">时间</text>
+                        <text x="10" y="90" text-anchor="middle" transform="rotate(-90,10,90)" class="text-sm">电压</text>
+                        
+                        <!-- 时间轴标签将由JS生成 -->
+                        <g id="timeLabels"></g>
+                        
+                        <text x="20" y="150" text-anchor="end" class="text-xs">0V</text>
+                        <text x="20" y="50" text-anchor="end" class="text-xs">5V</text>
+                        
+                        <!-- 周期指示器 -->
+                        <g id="periodIndicator"></g>
+                        
+                        <!-- PWM 波形路径 (将由 JavaScript 动态生成) -->
+                        <path id="pwmPath" class="pwm-wave"></path>
+                        
+                        <!-- 平均电压线 (将由 JavaScript 动态更新) -->
+                        <line id="avgLine" x1="30" y1="150" x2="570" y2="150" class="avg-line" />
+                        
+                        <!-- 平均电压文本 -->
+                        <text id="avgVoltageText" x="560" y="30" text-anchor="end" class="text-sm font-semibold">平均电压: 0V</text>
+                    </svg>
+                </div>
+                
+                <div class="w-full mb-6">
+                    <label for="dutyCycle" class="block mb-2 font-medium">占空比: <span id="dutyCycleValue">50</span>%</label>
+                    <input type="range" id="dutyCycle" min="0" max="100" value="50" class="w-full" oninput="updatePWM()">
+                </div>
+
+                <div class="w-full mb-2">
+                    <label for="frequency" class="block mb-2 font-medium">频率: <span id="frequencyValue">1</span> Hz</label>
+                    <input type="range" id="frequency" min="0.5" max="10" step="0.5" value="1" class="w-full" oninput="updatePWM()">
+                </div>
+                
+                <div class="w-full mb-6 flex items-center space-x-2">
+                    <span class="text-xs">低频</span>
+                    <div id="frequencyVisualizer" class="frequency-visualizer flex-grow">
+                        <div id="frequencyMarker" class="frequency-marker"></div>
+                        <div id="frequencyPulse" class="frequency-pulse"></div>
+                    </div>
+                    <span class="text-xs">高频</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="mb-6">
+            <h2 class="text-xl font-semibold mb-3">PWM 应用展示</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <!-- 电机控制 -->
+                <div class="border rounded-lg p-4 flex flex-col items-center">
+                    <h3 class="font-medium mb-3">电机速度控制</h3>
+                    <div class="w-[150px] h-[150px] relative mb-4">
+                        <svg width="100%" height="100%" viewBox="0 0 100 100">
+                            <circle cx="50" cy="50" r="45" fill="#e5e7eb" stroke="#9ca3af" stroke-width="1" />
+                            <g id="motor" class="motor">
+                                <circle cx="50" cy="50" r="40" fill="#d1d5db" stroke="#6b7280" stroke-width="1" />
+                                <rect x="10" y="48" width="80" height="4" fill="#4b5563" />
+                                <rect x="48" y="10" width="4" height="80" fill="#4b5563" />
+                            </g>
+                            <circle cx="50" cy="50" r="5" fill="#374151" />
+                        </svg>
+                    </div>
+                    <p id="motorSpeedText" class="text-sm">转速: 中速</p>
+                    <p id="motorFreqText" class="text-xs text-gray-500">频率影响: 平稳转动</p>
+                </div>
+                
+                <!-- LED 亮度控制 -->
+                <div class="border rounded-lg p-4 flex flex-col items-center">
+                    <h3 class="font-medium mb-3">LED 亮度控制</h3>
+                    <div class="w-[150px] h-[150px] relative mb-4">
+                        <svg width="100%" height="100%" viewBox="0 0 100 100">
+                            <defs>
+                                <radialGradient id="ledGradient" cx="50%" cy="50%" r="50%" fx="40%" fy="40%">
+                                    <stop offset="0%" style="stop-color:white;" />
+                                    <stop id="ledColor" offset="70%" style="stop-color:#ffeb3b;" />
+                                    <stop offset="100%" style="stop-color:#ffa000;" />
+                                </radialGradient>
+                            </defs>
+                            <g class="led-glow" style="--glow-intensity: 0.5;">
+                                <circle id="led" cx="50" cy="50" r="30" class="led" fill="url(#ledGradient)" stroke="#ca8a04" stroke-width="2" />
+                            </g>
+                            <circle cx="40" cy="40" r="8" fill="white" fill-opacity="0.6" />
+                        </svg>
+                    </div>
+                    <p id="ledBrightnessText" class="text-sm">亮度: 50%</p>
+                    <p id="ledFreqText" class="text-xs text-gray-500">频率影响: 稳定亮度</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="mt-6">
+            <h2 class="text-xl font-semibold mb-3">PWM 工作原理</h2>
+            <p class="mb-2">PWM 通过快速切换开关状态（高/低），调整高电平所占时间比例来控制平均输出功率：</p>
+            <ul class="list-disc pl-6 mb-4">
+                <li>占空比是高电平持续时间与总周期的比例</li>
+                <li>占空比越高，平均输出电压越大，设备接收的功率越大</li>
+                <li>频率决定了 PWM 信号的周期长短，必须足够高以避免闪烁或不平滑</li>
+                <li>低频PWM在某些应用中会导致可见的闪烁或震动</li>
+                <li>高频PWM能提供更平滑的控制效果，但可能增加系统功耗</li>
+            </ul>
+            <p>由于人眼和机械系统的惯性效应，我们只会察觉到平均值的变化，而不是快速的开关过程。</p>
+        </div>
+    </div>
+
+    <script>
+        // 初始化参数
+        let dutyCycle = 50; // 百分比
+        let frequency = 1; // Hz
+        let animationId;
+        let startTime;
+        const maxCycles = 4; // 显示的最大周期数
+        let flickerTimeout;
+        let ledFlickerActive = false;
+        
+        // 创建网格线
+        function createGridLines() {
+            const gridLines = document.getElementById('gridLines');
+            gridLines.innerHTML = '';
+            
+            // 横向网格线
+            for (let y = 50; y <= 150; y += 25) {
+                const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                line.setAttribute('x1', '30');
+                line.setAttribute('y1', y);
+                line.setAttribute('x2', '570');
+                line.setAttribute('y2', y);
+                line.setAttribute('class', 'grid-line');
+                gridLines.appendChild(line);
+            }
+            
+            // 创建时间标签
+            updateTimeLabels();
+        }
+        
+        // 更新时间轴标签和网格线
+        function updateTimeLabels() {
+            const timeLabels = document.getElementById('timeLabels');
+            timeLabels.innerHTML = '';
+            
+            const gridLines = document.getElementById('gridLines');
+            
+            // 计算一个周期在图表上的像素宽度
+            const period = 1 / frequency; // 周期 (秒)
+            const svgWidth = 540; // 绘图区域宽度 (570 - 30)
+            const cycleWidth = svgWidth / maxCycles;
+            
+            // 纵向网格线和标签
+            for (let i = 0; i <= maxCycles; i++) {
+                const x = 30 + i * cycleWidth;
+                
+                // 添加网格线
+                if (i > 0 && i < maxCycles) {
+                    const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                    line.setAttribute('x1', x);
+                    line.setAttribute('y1', '30');
+                    line.setAttribute('x2', x);
+                    line.setAttribute('y2', '150');
+                    line.setAttribute('class', 'grid-line');
+                    gridLines.appendChild(line);
+                }
+                
+                // 添加标签
+                const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                text.setAttribute('x', x);
+                text.setAttribute('y', '170');
+                text.setAttribute('text-anchor', 'middle');
+                text.setAttribute('class', 'text-xs');
+                text.textContent = `${i}T`;
+                timeLabels.appendChild(text);
+            }
+            
+            // 更新周期指示器
+            updatePeriodIndicator();
+        }
+        
+        // 更新周期指示器，显示频率对应的周期
+        function updatePeriodIndicator() {
+            const periodIndicator = document.getElementById('periodIndicator');
+            periodIndicator.innerHTML = '';
+            
+            const period = 1 / frequency; // 周期 (秒)
+            const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+            label.setAttribute('x', '560');
+            label.setAttribute('y', '45');
+            label.setAttribute('text-anchor', 'end');
+            label.setAttribute('class', 'text-xs text-gray-500');
+            label.textContent = `T = ${period.toFixed(2)}秒`;
+            periodIndicator.appendChild(label);
+        }
+
+        // 更新 PWM 波形和应用
+        function updatePWM() {
+            dutyCycle = document.getElementById('dutyCycle').value;
+            frequency = document.getElementById('frequency').value;
+            
+            document.getElementById('dutyCycleValue').textContent = dutyCycle;
+            document.getElementById('frequencyValue').textContent = frequency;
+            
+            // 更新时间轴标签
+            updateTimeLabels();
+            
+            // 计算平均电压 (0-5V)
+            const avgVoltage = (dutyCycle / 100) * 5;
+            document.getElementById('avgVoltageText').textContent = `平均电压: ${avgVoltage.toFixed(1)}V`;
+            
+            // 更新平均电压线
+            const avgY = 150 - (avgVoltage / 5) * 100;
+            document.getElementById('avgLine').setAttribute('y1', avgY);
+            document.getElementById('avgLine').setAttribute('y2', avgY);
+            
+            // 更新电机动画
+            const motorSpeed = 2 + (dutyCycle / 100) * 8; // 0.5s 到 2s 的旋转速度
+            document.getElementById('motor').style.animationDuration = `${10 - motorSpeed}s`;
+            
+            // 更新电机速度文本
+            let speedText = "停止";
+            if (dutyCycle > 0 && dutyCycle <= 25) speedText = "低速";
+            else if (dutyCycle > 25 && dutyCycle <= 50) speedText = "中速";
+            else if (dutyCycle > 50 && dutyCycle <= 75) speedText = "高速";
+            else if (dutyCycle > 75) speedText = "最高速";
+            document.getElementById('motorSpeedText').textContent = `转速: ${speedText}`;
+            
+            // 更新电机频率影响文本
+            let motorFreqText;
+            if (frequency < 2) motorFreqText = "频率过低：明显抖动";
+            else if (frequency < 5) motorFreqText = "频率适中：轻微抖动";
+            else motorFreqText = "频率充足：平稳转动";
+            document.getElementById('motorFreqText').textContent = `频率影响: ${motorFreqText}`;
+            
+            // 更新 LED 亮度
+            const ledBrightness = dutyCycle / 100;
+            updateLedBrightness(ledBrightness);
+            document.getElementById('ledBrightnessText').textContent = `亮度: ${dutyCycle}%`;
+            
+            // 更新LED频率影响文本和模拟效果
+            let ledFreqText;
+            if (frequency < 2) {
+                ledFreqText = "频率过低：可见闪烁";
+                startLedFlicker(ledBrightness);
+            } else if (frequency < 5) {
+                ledFreqText = "频率适中：轻微闪烁";
+                startLedFlicker(ledBrightness, 0.7);
+            } else {
+                ledFreqText = "频率充足：稳定亮度";
+                stopLedFlicker(ledBrightness);
+            }
+            document.getElementById('ledFreqText').textContent = `频率影响: ${ledFreqText}`;
+            
+            // 更新频率可视化器
+            updateFrequencyVisualizer();
+            
+            // 重置动画
+            if (animationId) {
+                cancelAnimationFrame(animationId);
+            }
+            startTime = null;
+            animatePWM();
+        }
+        
+        // 更新频率可视化器
+        function updateFrequencyVisualizer() {
+            const minFreq = 0.5;
+            const maxFreq = 10;
+            const percentage = (frequency - minFreq) / (maxFreq - minFreq) * 100;
+            
+            // 更新频率标记位置
+            const marker = document.getElementById('frequencyMarker');
+            marker.style.left = `${percentage}%`;
+            
+            // 更新脉冲动画
+            const pulse = document.getElementById('frequencyPulse');
+            pulse.style.animationDuration = `${1/frequency}s`;
+        }
+        
+        // 模拟LED在低频下的闪烁效果
+        function startLedFlicker(brightness, intensity = 1) {
+            if (flickerTimeout) {
+                clearTimeout(flickerTimeout);
+            }
+            
+            if (!ledFlickerActive) {
+                ledFlickerActive = true;
+                let isOn = true;
+                
+                const flickerFunction = () => {
+                    isOn = !isOn;
+                    const ledGlow = document.querySelector('.led-glow');
+                    if (isOn) {
+                        updateLedBrightness(brightness);
+                    } else {
+                        const reducedBrightness = brightness * (1 - 0.8 * intensity);
+                        updateLedBrightness(reducedBrightness);
+                    }
+                    
+                    // 闪烁频率是PWM频率的2倍
+                    const flickerRate = 1000 / (frequency * 2);
+                    flickerTimeout = setTimeout(flickerFunction, flickerRate);
+                };
+                
+                flickerFunction();
+            }
+        }
+        
+        // 停止LED闪烁效果
+        function stopLedFlicker(brightness) {
+            if (flickerTimeout) {
+                clearTimeout(flickerTimeout);
+                flickerTimeout = null;
+            }
+            ledFlickerActive = false;
+            updateLedBrightness(brightness);
+        }
+        
+        // 更新LED亮度，使用渐变和辉光效果
+        function updateLedBrightness(brightness) {
+            // 更新LED渐变色
+            const ledStop = document.getElementById('ledColor');
+            const r = Math.round(255 * (0.8 + brightness * 0.2));
+            const g = Math.round(235 * (0.6 + brightness * 0.4));
+            const b = Math.round(59 * (0.5 + brightness * 0.5));
+            ledStop.style.stopColor = `rgb(${r}, ${g}, ${b})`;
+            
+            // 更新辉光效果
+            const ledGlow = document.querySelector('.led-glow');
+            ledGlow.style.setProperty('--glow-intensity', brightness);
+        }
+        
+        // 生成 PWM 波形路径
+        function generatePWMPath(t) {
+            const period = 1 / frequency; // 周期 (秒)
+            const timeOffset = t % period; // 当前周期内的时间偏移
+            const cycleProgress = timeOffset / period; // 当前周期内的进度 (0-1)
+            
+            // SVG 坐标
+            const startX = 30;
+            const endX = 570;
+            const svgWidth = endX - startX;
+            const cycleWidth = svgWidth / maxCycles; // 每个周期的宽度
+            
+            const highY = 50; // 高电平 Y 坐标
+            const lowY = 150; // 低电平 Y 坐标
+            
+            let path = '';
+            
+            // 计算动画偏移量，使波形向左滚动
+            const scrollOffset = (cycleProgress * cycleWidth) % svgWidth;
+            
+            // 绘制足够多的周期来填满视图，并考虑动画
+            for (let i = 0; i < maxCycles + 1; i++) {
+                const cycleStartX = startX + i * cycleWidth - scrollOffset;
+                const dutyX = cycleStartX + (dutyCycle / 100) * cycleWidth;
+                const cycleEndX = cycleStartX + cycleWidth;
+                
+                // 如果周期完全在可视区域外，跳过
+                if (cycleEndX < startX || cycleStartX > endX) continue;
+                
+                // 对第一个周期的起点进行特殊处理
+                if (i === 0 && path === '') {
+                    // 检查周期开始时是高电平还是低电平
+                    if (cycleStartX >= startX) {
+                        path = `M ${cycleStartX} ${lowY} `;
+                    } else {
+                        // 如果周期开始在可视区域左侧
+                        if (dutyX <= startX) {
+                            // 如果高电平结束也在可视区域左侧，开始于低电平
+                            path = `M ${startX} ${lowY} `;
+                        } else {
+                            // 否则开始于高电平
+                            path = `M ${startX} ${highY} `;
+                        }
+                    }
+                }
+                
+                // 确保波形在可视区域内
+                const visibleStartX = Math.max(startX, cycleStartX);
+                const visibleEndX = Math.min(endX, cycleEndX);
+                const visibleDutyX = Math.min(endX, Math.max(startX, dutyX));
+                
+                // 低到高跃变
+                if (cycleStartX >= startX && cycleStartX <= endX) {
+                    path += `L ${cycleStartX} ${lowY} L ${cycleStartX} ${highY} `;
+                }
+                
+                // 高电平部分
+                if (dutyX > startX) {
+                    const highLevelStartX = Math.max(startX, cycleStartX);
+                    path += `L ${visibleDutyX} ${highY} `;
+                }
+                
+                // 高到低跃变
+                if (dutyX >= startX && dutyX <= endX) {
+                    path += `L ${dutyX} ${highY} L ${dutyX} ${lowY} `;
+                }
+                
+                // 低电平到周期结束
+                if (visibleEndX > visibleDutyX) {
+                    path += `L ${visibleEndX} ${lowY} `;
+                }
+            }
+            
+            return path;
+        }
+        
+        // 动画循环
+        function animatePWM(timestamp) {
+            if (!startTime) startTime = timestamp;
+            const elapsedTime = (timestamp - startTime) / 1000; // 转换为秒
+            
+            const pwmPath = generatePWMPath(elapsedTime);
+            document.getElementById('pwmPath').setAttribute('d', pwmPath);
+            
+            animationId = requestAnimationFrame(animatePWM);
+        }
+        
+        // 初始化
+        createGridLines();
+        updatePWM();
+    </script>
+<script>window.parent.postMessage({ action: "ready" }, "*"); 
+ 
+window.console = new Proxy(console, {
+  get(target, prop) {
+    if (['log', 'warn', 'error'].includes(prop)) {
+      return new Proxy(target[prop], {
+        apply(fn, thisArg, args) {
+          fn.apply(thisArg, args);
+          window.parent.postMessage({ action: 'console', 
+            type: prop, 
+            args: args.map((arg) => {
+              try {
+                return JSON.stringify(arg).replace(/^["']|["']$/g, '');
+              } catch (e) {
+                return arg;
+              }
+            }) 
+          }, '*');
+        }
+      });
+    }
+    return target[prop];
+  }
+});
+</script></body>
+</html>

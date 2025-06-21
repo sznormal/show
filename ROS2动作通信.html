@@ -1,0 +1,1059 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ROS2动作通信原理</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        body {
+            background: linear-gradient(135deg, #1a1a2e, #16213e, #0f3460);
+            color: #fff;
+            min-height: 100vh;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            overflow-x: hidden;
+        }
+        
+        header {
+            text-align: center;
+            margin: 20px 0 30px;
+            width: 100%;
+            padding: 20px;
+        }
+        
+        h1 {
+            font-size: 2.8rem;
+            margin-bottom: 15px;
+            text-shadow: 0 2px 10px rgba(0,0,0,0.3);
+            background: linear-gradient(45deg, #ff9966, #ff5e62);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        
+        .subtitle {
+            font-size: 1.2rem;
+            opacity: 0.9;
+            max-width: 800px;
+            margin: 0 auto;
+            line-height: 1.6;
+            color: #e0f7fa;
+        }
+        
+        .container {
+            display: flex;
+            width: 100%;
+            max-width: 1200px;
+            margin: 20px auto;
+            gap: 30px;
+        }
+        
+        .animation-section {
+            flex: 3;
+            background: rgba(20, 30, 60, 0.85);
+            border-radius: 20px;
+            padding: 25px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 105, 97, 0.3);
+        }
+        
+        .control-section {
+            flex: 2;
+            background: rgba(20, 30, 60, 0.85);
+            border-radius: 20px;
+            padding: 25px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 105, 97, 0.3);
+        }
+        
+        .animation-area {
+            position: relative;
+            height: 500px;
+            background: rgba(25, 40, 80, 0.7);
+            border-radius: 15px;
+            margin-top: 20px;
+            overflow: hidden;
+            border: 1px solid rgba(255, 150, 100, 0.3);
+        }
+        
+        .node {
+            position: absolute;
+            width: 180px;
+            height: 180px;
+            border-radius: 50%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            padding: 20px;
+            font-weight: bold;
+            z-index: 10;
+            transition: all 0.3s ease;
+        }
+        
+        .action-server {
+            left: 80px;
+            top: 60px;
+            background: radial-gradient(circle, #ff5e62, #c0484c);
+            border: 3px solid #ff9966;
+            box-shadow: 0 0 30px rgba(255, 100, 100, 0.6);
+        }
+        
+        .action-client {
+            right: 80px;
+            top: 60px;
+            background: radial-gradient(circle, #4da0ff, #2a6fc7);
+            border: 3px solid #66aaff;
+            box-shadow: 0 0 30px rgba(100, 180, 255, 0.6);
+        }
+        
+        .node-label {
+            font-size: 1.8rem;
+            margin-bottom: 10px;
+            color: #fff;
+        }
+        
+        .node-role {
+            font-size: 1.2rem;
+            color: rgba(255, 255, 255, 0.9);
+            margin-bottom: 15px;
+        }
+        
+        .action-channel {
+            position: absolute;
+            top: 270px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 440px;
+            height: 120px;
+            background: rgba(255, 150, 100, 0.15);
+            border: 2px dashed rgba(255, 180, 100, 0.6);
+            border-radius: 20px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 5;
+        }
+        
+        .action-name {
+            font-size: 1.5rem;
+            color: #ffcc99;
+            margin-bottom: 10px;
+        }
+        
+        .action-type {
+            font-size: 1rem;
+            color: #ffaa77;
+            font-style: italic;
+        }
+        
+        .bubble {
+            position: absolute;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 1.5rem;
+            z-index: 20;
+            box-shadow: 0 0 20px rgba(255, 200, 0, 0.8);
+            opacity: 0;
+            transition: left 1s ease, top 1s ease;
+        }
+        
+        .goal-bubble {
+            background: radial-gradient(circle, #66ff66, #22cc22);
+        }
+        
+        .feedback-bubble {
+            background: radial-gradient(circle, #ffff66, #ffcc00);
+        }
+        
+        .result-bubble {
+            background: radial-gradient(circle, #ff6666, #cc2222);
+        }
+        
+        .bubble-content {
+            position: absolute;
+            padding: 10px 15px;
+            border-radius: 10px;
+            font-size: 1.1rem;
+            min-width: 180px;
+            text-align: center;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        
+        .goal-content {
+            background: rgba(200, 255, 200, 0.95);
+            color: #009900;
+            top: -60px;
+        }
+        
+        .feedback-content {
+            background: rgba(255, 255, 200, 0.95);
+            color: #996600;
+            top: -60px;
+        }
+        
+        .result-content {
+            background: rgba(255, 200, 200, 0.95);
+            color: #990000;
+            bottom: -60px;
+        }
+        
+        .progress-container {
+            position: absolute;
+            width: 300px;
+            height: 20px;
+            background: rgba(50, 50, 50, 0.6);
+            border-radius: 10px;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            overflow: hidden;
+            z-index: 15;
+        }
+        
+        .progress-bar {
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(90deg, #ff9966, #ff5e62);
+            border-radius: 10px;
+            transition: width 0.5s ease;
+        }
+        
+        .control-panel {
+            margin-top: 25px;
+        }
+        
+        .input-group {
+            margin-bottom: 25px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 10px;
+            font-size: 1.2rem;
+            color: #e0f7fa;
+        }
+        
+        input, select {
+            width: 100%;
+            padding: 14px;
+            border-radius: 10px;
+            border: none;
+            background: rgba(40, 60, 100, 0.7);
+            color: white;
+            font-size: 1.1rem;
+            border: 1px solid rgba(255, 150, 100, 0.4);
+            margin-bottom: 10px;
+        }
+        
+        input:focus, select:focus {
+            outline: none;
+            border-color: #ff9966;
+            background: rgba(60, 80, 120, 0.8);
+            box-shadow: 0 0 10px rgba(255, 150, 100, 0.5);
+        }
+        
+        button {
+            width: 100%;
+            padding: 15px;
+            background: linear-gradient(45deg, #ff9966, #ff5e62);
+            border: none;
+            border-radius: 10px;
+            color: white;
+            font-size: 1.2rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 5px 15px rgba(255, 100, 100, 0.5);
+            margin-top: 10px;
+        }
+        
+        button:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 8px 20px rgba(255, 120, 100, 0.7);
+            background: linear-gradient(45deg, #ffaa77, #ff7777);
+        }
+        
+        button:active {
+            transform: translateY(1px);
+        }
+        
+        .code-section {
+            margin-top: 25px;
+            background: rgba(20, 40, 80, 0.9);
+            border-radius: 10px;
+            padding: 20px;
+            font-family: 'Consolas', 'Courier New', monospace;
+            overflow-x: auto;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        
+        .code-tabs {
+            display: flex;
+            margin-bottom: 15px;
+            border-bottom: 1px solid rgba(255, 150, 100, 0.4);
+        }
+        
+        .code-tab {
+            padding: 10px 20px;
+            cursor: pointer;
+            border-radius: 5px 5px 0 0;
+            background: rgba(255, 150, 100, 0.2);
+            margin-right: 5px;
+            color: #ffddbb;
+            transition: all 0.3s;
+        }
+        
+        .code-tab:hover {
+            background: rgba(255, 150, 100, 0.3);
+        }
+        
+        .code-tab.active {
+            background: rgba(255, 150, 100, 0.5);
+            font-weight: bold;
+            color: white;
+        }
+        
+        pre {
+            color: #aaffaa;
+            line-height: 1.5;
+            font-size: 1rem;
+            white-space: pre-wrap;
+        }
+        
+        .log-section {
+            margin-top: 20px;
+            background: rgba(20, 40, 80, 0.9);
+            border-radius: 10px;
+            padding: 15px;
+            max-height: 150px;
+            overflow-y: auto;
+        }
+        
+        .log-section h3 {
+            margin-bottom: 10px;
+            color: #ffaa77;
+            text-align: center;
+        }
+        
+        .log-item {
+            padding: 8px;
+            border-bottom: 1px solid rgba(255, 150, 100, 0.2);
+            font-family: 'Courier New', monospace;
+            color: #e0f7fa;
+            font-size: 0.95rem;
+        }
+        
+        .log-item:last-child {
+            border-bottom: none;
+        }
+        
+        .log-item.goal {
+            color: #99ff99;
+        }
+        
+        .log-item.feedback {
+            color: #ffff99;
+        }
+        
+        .log-item.result {
+            color: #ff9999;
+        }
+        
+        .explanation {
+            max-width: 1200px;
+            margin: 30px auto;
+            background: rgba(25, 40, 80, 0.8);
+            border-radius: 15px;
+            padding: 25px;
+            line-height: 1.7;
+            font-size: 1.1rem;
+            border: 1px solid rgba(255, 150, 100, 0.3);
+        }
+        
+        .explanation h2 {
+            color: #ff9966;
+            margin-bottom: 20px;
+            text-align: center;
+            font-size: 1.8rem;
+        }
+        
+        .highlight {
+            color: #ffcc66;
+            font-weight: bold;
+        }
+        
+        .explanation ul {
+            padding-left: 30px;
+            margin: 15px 0;
+        }
+        
+        .explanation li {
+            margin-bottom: 10px;
+        }
+        
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(255, 150, 100, 0.7); }
+            70% { box-shadow: 0 0 0 15px rgba(255, 150, 100, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(255, 150, 100, 0); }
+        }
+        
+        .pulse {
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes glow {
+            0% { box-shadow: 0 0 10px rgba(255, 100, 100, 0.7); }
+            50% { box-shadow: 0 0 20px rgba(255, 100, 100, 0.9); }
+            100% { box-shadow: 0 0 10px rgba(255, 100, 100, 0.7); }
+        }
+        
+        .server-active {
+            animation: glow 1.5s infinite;
+        }
+        
+        @media (max-width: 900px) {
+            .container {
+                flex-direction: column;
+            }
+            
+            .node {
+                width: 140px;
+                height: 140px;
+            }
+            
+            .action-server {
+                left: 30px;
+            }
+            
+            .action-client {
+                right: 30px;
+            }
+            
+            .action-channel {
+                width: 300px;
+            }
+        }
+        
+        @media (max-width: 600px) {
+            .node {
+                width: 120px;
+                height: 120px;
+                top: 80px;
+            }
+            
+            .node-label {
+                font-size: 1.5rem;
+            }
+            
+            .node-role {
+                font-size: 1rem;
+            }
+            
+            .action-channel {
+                width: 240px;
+            }
+            
+            .action-name {
+                font-size: 1.2rem;
+            }
+            
+            h1 {
+                font-size: 2.2rem;
+            }
+        }
+        
+        .ros-logo {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            width: 80px;
+            height: 80px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-weight: bold;
+            font-size: 1.8rem;
+            color: #ff9966;
+            box-shadow: 0 0 20px rgba(255, 100, 100, 0.5);
+        }
+        
+        .connection-line {
+            position: absolute;
+            height: 4px;
+            background: rgba(255, 180, 100, 0.3);
+            top: 270px;
+            left: 260px;
+            width: 280px;
+            z-index: 1;
+        }
+        
+        .connection-dot {
+            position: absolute;
+            width: 8px;
+            height: 8px;
+            background: rgba(255, 180, 100, 0.8);
+            border-radius: 50%;
+            top: 268px;
+            z-index: 2;
+        }
+        
+        .status-indicator {
+            position: absolute;
+            top: 220px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: #ffcc99;
+            font-size: 1.2rem;
+            font-weight: bold;
+            z-index: 10;
+        }
+    </style>
+</head>
+<body>
+    <div class="ros-logo">ROS2</div>
+    
+    <header>
+        <h1>ROS2 动作通信原理</h1>
+        <p class="subtitle">本动画展示了ROS2中动作(Action)的通信机制。客户端发送目标，服务端执行任务并发送反馈，最后返回结果。</p>
+    </header>
+    
+    <div class="container">
+        <section class="animation-section">
+            <h2>动作通信演示</h2>
+            <div class="animation-area">
+                <div class="connection-line"></div>
+                <div class="connection-dot" style="left: 260px;"></div>
+                <div class="connection-dot" style="left: 340px;"></div>
+                <div class="connection-dot" style="left: 420px;"></div>
+                <div class="connection-dot" style="left: 500px;"></div>
+                <div class="connection-dot" style="left: 580px;"></div>
+                
+                <div class="node action-server">
+                    <div class="node-label">动作服务端</div>
+                    <div class="node-role">任务执行者</div>
+                    <div class="node-info">/fibonacci_server</div>
+                </div>
+                
+                <div class="node action-client pulse">
+                    <div class="node-label">动作客户端</div>
+                    <div class="node-role">任务发起者</div>
+                    <div class="node-info">/fibonacci_client</div>
+                </div>
+                
+                <div class="action-channel">
+                    <div class="action-name">/fibonacci</div>
+                    <div class="action-type">example_interfaces/action/Fibonacci</div>
+                </div>
+                
+                <div class="bubble goal-bubble" id="goal-bubble">
+                    <div class="bubble-content goal-content" id="goal-content">目标: 生成前 5 个数字</div>
+                </div>
+                
+                <div class="bubble feedback-bubble" id="feedback-bubble">
+                    <div class="bubble-content feedback-content" id="feedback-content">反馈: 已生成 2 个</div>
+                </div>
+                
+                <div class="bubble result-bubble" id="result-bubble">
+                    <div class="bubble-content result-content" id="result-content">结果: [0, 1, 1, 2, 3]</div>
+                </div>
+                
+                <div class="progress-container">
+                    <div class="progress-bar" id="progress-bar"></div>
+                </div>
+                
+                <div class="status-indicator" id="status-indicator">等待目标...</div>
+            </div>
+        </section>
+        
+        <section class="control-section">
+            <h2>控制面板</h2>
+            <div class="control-panel">
+                <div class="input-group">
+                    <label for="order-input">斐波那契数列长度：</label>
+                    <input type="number" id="order-input" value="5" min="2" max="20" placeholder="输入长度 (2-20)">
+                    <select id="action-type">
+                        <option value="fibonacci">斐波那契数列</option>
+                        <option value="countdown">倒计时</option>
+                        <option value="processing">数据处理</option>
+                    </select>
+                </div>
+                
+                <button id="send-goal">发送目标</button>
+                <button id="cancel-goal" style="background: linear-gradient(45deg, #666666, #999999);">取消目标</button>
+                
+                <div class="log-section">
+                    <h3>通信日志</h3>
+                    <div id="log-list">
+                        <div class="log-item">等待目标...</div>
+                    </div>
+                </div>
+                
+                <div class="code-section">
+                    <div class="code-tabs">
+                        <div class="code-tab active" data-tab="action-server">服务端代码</div>
+                        <div class="code-tab" data-tab="action-client">客户端代码</div>
+                    </div>
+                    <pre id="action-server-code">
+import rclpy
+from rclpy.action import ActionServer
+from rclpy.node import Node
+from example_interfaces.action import Fibonacci
+
+class FibonacciActionServer(Node):
+    def __init__(self):
+        super().__init__('fibonacci_server')
+        self.action_server = ActionServer(
+            self,
+            Fibonacci,
+            'fibonacci',
+            self.execute_callback)
+        self.get_logger().info('斐波那契动作服务器已启动...')
+
+    def execute_callback(self, goal_handle):
+        self.get_logger().info('执行目标: 生成前 {0} 个斐波那契数'.format(
+            goal_handle.request.order))
+        
+        sequence = [0, 1]
+        feedback = Fibonacci.Feedback()
+        
+        for i in range(1, goal_handle.request.order):
+            sequence.append(sequence[i] + sequence[i-1])
+            feedback.sequence = sequence
+            
+            # 发送反馈
+            goal_handle.publish_feedback(feedback)
+            self.get_logger().info('反馈: 已生成 {0} 个数字'.format(len(sequence)))
+            
+            # 模拟处理时间
+            rclpy.sleep(0.5)
+            
+            # 检查是否取消
+            if goal_handle.is_cancel_requested:
+                goal_handle.canceled()
+                self.get_logger().info('目标已取消')
+                return Fibonacci.Result()
+        
+        goal_handle.succeed()
+        result = Fibonacci.Result()
+        result.sequence = sequence
+        self.get_logger().info('结果: 完成 {0} 个数字'.format(len(sequence)))
+        return result
+
+def main(args=None):
+    rclpy.init(args=args)
+    server = FibonacciActionServer()
+    rclpy.spin(server)
+    rclpy.shutdown()
+
+if __name__ == '__main__':
+    main()</pre>
+                    <pre id="action-client-code" style="display:none;">
+import rclpy
+from rclpy.action import ActionClient
+from rclpy.node import Node
+from example_interfaces.action import Fibonacci
+
+class FibonacciActionClient(Node):
+    def __init__(self):
+        super().__init__('fibonacci_client')
+        self.action_client = ActionClient(self, Fibonacci, 'fibonacci')
+        self.get_logger().info('斐波那契动作客户端已启动...')
+
+    def send_goal(self, order):
+        goal_msg = Fibonacci.Goal()
+        goal_msg.order = order
+        
+        self.action_client.wait_for_server()
+        self.send_goal_future = self.action_client.send_goal_async(
+            goal_msg,
+            feedback_callback=self.feedback_callback)
+        
+        self.send_goal_future.add_done_callback(self.goal_response_callback)
+
+    def goal_response_callback(self, future):
+        goal_handle = future.result()
+        if not goal_handle.accepted:
+            self.get_logger().info('目标被拒绝')
+            return
+        
+        self.get_logger().info('目标已接受')
+        self.result_future = goal_handle.get_result_async()
+        self.result_future.add_done_callback(self.get_result_callback)
+
+    def feedback_callback(self, feedback_msg):
+        feedback = feedback_msg.feedback
+        self.get_logger().info('收到反馈: {0}'.format(feedback.sequence))
+
+    def get_result_callback(self, future):
+        result = future.result().result
+        self.get_logger().info('收到结果: {0}'.format(result.sequence))
+        rclpy.shutdown()
+
+def main(args=None):
+    rclpy.init(args=args)
+    client = FibonacciActionClient()
+    client.send_goal(5)
+    rclpy.spin(client)
+
+if __name__ == '__main__':
+    main()</pre>
+                </div>
+            </div>
+        </section>
+    </div>
+    
+    <div class="explanation">
+        <h2>ROS2 动作通信原理</h2>
+        <p>在ROS2中，<span class="highlight">动作(Action)</span>是一种高级的通信机制，适用于需要长时间运行的任务，并支持任务取消和进度反馈。</p>
+        
+        <p>动作通信包含三个核心部分：</p>
+        
+        <ul>
+            <li><span class="highlight">目标(Goal)</span>：客户端向动作服务器发送的任务目标</li>
+            <li><span class="highlight">反馈(Feedback)</span>：动作服务器在执行过程中定期发送的进度更新</li>
+            <li><span class="highlight">结果(Result)</span>：动作服务器在任务完成后发送的最终结果</li>
+        </ul>
+        
+        <p>动作通信的主要角色：</p>
+        
+        <ul>
+            <li><span class="highlight">动作服务器(Action Server)</span>：接收目标，执行任务，发送反馈和结果</li>
+            <li><span class="highlight">动作客户端(Action Client)</span>：发送目标，接收反馈和结果，可以取消任务</li>
+        </ul>
+        
+        <p>动作通信的特点：</p>
+        
+        <ul>
+            <li><span class="highlight">异步执行</span>：动作服务器在后台执行任务</li>
+            <li><span class="highlight">进度反馈</span>：客户端可以实时了解任务进度</li>
+            <li><span class="highlight">任务取消</span>：客户端可以随时取消正在执行的任务</li>
+            <li><span class="highlight">状态跟踪</span>：提供任务状态（接受、执行中、取消、完成等）</li>
+            <li><span class="highlight">复杂任务支持</span>：适合需要长时间运行的任务</li>
+        </ul>
+        
+        <p>在本动画中，您可以通过设置斐波那契数列长度并点击"发送目标"按钮来模拟动作通信过程。观察目标、反馈和结果的传输动画。</p>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const sendBtn = document.getElementById('send-goal');
+            const cancelBtn = document.getElementById('cancel-goal');
+            const orderInput = document.getElementById('order-input');
+            const actionType = document.getElementById('action-type');
+            const goalBubble = document.getElementById('goal-bubble');
+            const feedbackBubble = document.getElementById('feedback-bubble');
+            const resultBubble = document.getElementById('result-bubble');
+            const goalContent = document.getElementById('goal-content');
+            const feedbackContent = document.getElementById('feedback-content');
+            const resultContent = document.getElementById('result-content');
+            const logList = document.getElementById('log-list');
+            const serverTab = document.querySelector('[data-tab="action-server"]');
+            const clientTab = document.querySelector('[data-tab="action-client"]');
+            const serverCode = document.getElementById('action-server-code');
+            const clientCode = document.getElementById('action-client-code');
+            const serverNode = document.querySelector('.action-server');
+            const clientNode = document.querySelector('.action-client');
+            const actionChannel = document.querySelector('.action-channel');
+            const progressBar = document.getElementById('progress-bar');
+            const statusIndicator = document.getElementById('status-indicator');
+            
+            let actionInProgress = false;
+            let actionTimer = null;
+            let progress = 0;
+            let currentOrder = 5;
+            let isCancelled = false;
+            
+            // 获取元素中心位置
+            function getElementCenter(element) {
+                const rect = element.getBoundingClientRect();
+                const containerRect = document.querySelector('.animation-area').getBoundingClientRect();
+                return {
+                    x: rect.left + rect.width/2 - containerRect.left,
+                    y: rect.top + rect.height/2 - containerRect.top
+                };
+            }
+            
+            // 获取服务端、客户端和动作通道的中心位置
+            const serverCenter = getElementCenter(serverNode);
+            const clientCenter = getElementCenter(clientNode);
+            const actionCenter = getElementCenter(actionChannel);
+            
+            // 初始设置消息位置
+            goalBubble.style.left = (clientCenter.x - 25) + 'px';
+            goalBubble.style.top = (clientCenter.y - 25) + 'px';
+            feedbackBubble.style.left = (serverCenter.x - 25) + 'px';
+            feedbackBubble.style.top = (serverCenter.y - 25) + 'px';
+            resultBubble.style.left = (serverCenter.x - 25) + 'px';
+            resultBubble.style.top = (serverCenter.y - 25) + 'px';
+            
+            // 发送目标
+            sendBtn.addEventListener('click', function() {
+                if (actionInProgress) {
+                    alert("当前已有动作在执行中");
+                    return;
+                }
+                
+                const order = parseInt(orderInput.value) || 5;
+                if (order < 2 || order > 20) {
+                    alert("请输入2-20之间的数字");
+                    return;
+                }
+                
+                currentOrder = order;
+                isCancelled = false;
+                progress = 0;
+                progressBar.style.width = '0%';
+                
+                // 更新目标内容
+                goalContent.textContent = `目标: 生成前 ${order} 个数字`;
+                statusIndicator.textContent = "目标已接受";
+                
+                // 添加日志 - 发送目标
+                addLog(`[客户端] 发送目标: 生成前 ${order} 个斐波那契数`, 'goal');
+                
+                // 显示目标气泡
+                goalBubble.style.opacity = '1';
+                goalContent.style.opacity = '1';
+                
+                // 第一步：目标从客户端移动到动作通道
+                goalBubble.style.left = (actionCenter.x - 25) + 'px';
+                goalBubble.style.top = (actionCenter.y - 25) + 'px';
+                
+                setTimeout(() => {
+                    // 第二步：目标移动到服务端
+                    goalBubble.style.left = (serverCenter.x - 25) + 'px';
+                    goalBubble.style.top = (serverCenter.y - 25) + 'px';
+                    
+                    // 添加日志 - 服务端接受目标
+                    addLog(`[服务端] 接受目标: 开始生成序列`, 'goal');
+                    
+                    // 服务端激活效果
+                    serverNode.classList.add('server-active');
+                    actionInProgress = true;
+                    
+                    // 隐藏目标气泡
+                    setTimeout(() => {
+                        goalBubble.style.opacity = '0';
+                        goalContent.style.opacity = '0';
+                        
+                        // 开始执行任务
+                        executeAction();
+                    }, 500);
+                }, 1000);
+            });
+            
+            // 取消目标
+            cancelBtn.addEventListener('click', function() {
+                if (!actionInProgress) {
+                    alert("当前没有正在执行的动作");
+                    return;
+                }
+                
+                isCancelled = true;
+                addLog(`[客户端] 发送取消请求`, 'result');
+                statusIndicator.textContent = "目标已取消";
+                statusIndicator.style.color = "#ff7777";
+                
+                // 添加取消动画效果
+                serverNode.style.animation = "none";
+                setTimeout(() => {
+                    serverNode.style.animation = "glow 1.5s infinite";
+                    serverNode.style.boxShadow = "0 0 20px rgba(255, 0, 0, 0.8)";
+                }, 10);
+                
+                setTimeout(() => {
+                    if (actionTimer) clearInterval(actionTimer);
+                    actionInProgress = false;
+                    
+                    // 添加日志 - 服务端取消
+                    addLog(`[服务端] 目标已取消`, 'result');
+                    
+                    // 重置状态
+                    setTimeout(() => {
+                        serverNode.classList.remove('server-active');
+                        progressBar.style.width = '0%';
+                        statusIndicator.textContent = "等待目标...";
+                        statusIndicator.style.color = "#ffcc99";
+                    }, 1000);
+                }, 1000);
+            });
+            
+            // 执行动作
+            function executeAction() {
+                let step = 0;
+                const totalSteps = currentOrder - 1;
+                const sequence = [0, 1];
+                
+                actionTimer = setInterval(() => {
+                    if (step >= totalSteps || isCancelled) {
+                        clearInterval(actionTimer);
+                        
+                        if (!isCancelled) {
+                            // 任务完成，发送结果
+                            sendResult(sequence);
+                        }
+                        return;
+                    }
+                    
+                    // 计算下一个斐波那契数
+                    sequence.push(sequence[step] + sequence[step + 1]);
+                    step++;
+                    progress = Math.min(100, Math.round((step / totalSteps) * 100));
+                    
+                    // 更新进度条
+                    progressBar.style.width = progress + '%';
+                    
+                    // 发送反馈
+                    sendFeedback(step, sequence);
+                }, 1000);
+            }
+            
+            // 发送反馈
+            function sendFeedback(step, sequence) {
+                feedbackContent.textContent = `反馈: 已生成 ${step + 2} 个`;
+                
+                // 显示反馈气泡
+                feedbackBubble.style.opacity = '1';
+                feedbackContent.style.opacity = '1';
+                
+                // 添加日志 - 发送反馈
+                addLog(`[服务端] 发送反馈: 序列=${sequence.join(', ')}`, 'feedback');
+                statusIndicator.textContent = `执行中: ${progress}%`;
+                
+                // 第一步：反馈从服务端移动到动作通道
+                feedbackBubble.style.left = (actionCenter.x - 25) + 'px';
+                feedbackBubble.style.top = (actionCenter.y - 25) + 'px';
+                
+                setTimeout(() => {
+                    // 第二步：反馈移动到客户端
+                    feedbackBubble.style.left = (clientCenter.x - 25) + 'px';
+                    feedbackBubble.style.top = (clientCenter.y - 25) + 'px';
+                    
+                    // 添加日志 - 客户端接收反馈
+                    addLog(`[客户端] 收到反馈: ${step + 2}/${currentOrder}`, 'feedback');
+                    
+                    // 隐藏反馈气泡
+                    setTimeout(() => {
+                        feedbackBubble.style.opacity = '0';
+                        feedbackContent.style.opacity = '0';
+                        
+                        // 重置位置
+                        feedbackBubble.style.left = (serverCenter.x - 25) + 'px';
+                        feedbackBubble.style.top = (serverCenter.y - 25) + 'px';
+                    }, 1000);
+                }, 1000);
+            }
+            
+            // 发送结果
+            function sendResult(sequence) {
+                resultContent.textContent = `结果: [${sequence.join(', ')}]`;
+                statusIndicator.textContent = "任务完成";
+                statusIndicator.style.color = "#99ff99";
+                
+                // 显示结果气泡
+                resultBubble.style.opacity = '1';
+                resultContent.style.opacity = '1';
+                
+                // 添加日志 - 发送结果
+                addLog(`[服务端] 发送结果: 序列=${sequence.join(', ')}`, 'result');
+                
+                // 第一步：结果从服务端移动到动作通道
+                resultBubble.style.left = (actionCenter.x - 25) + 'px';
+                resultBubble.style.top = (actionCenter.y - 25) + 'px';
+                
+                setTimeout(() => {
+                    // 第二步：结果移动到客户端
+                    resultBubble.style.left = (clientCenter.x - 25) + 'px';
+                    resultBubble.style.top = (clientCenter.y - 25) + 'px';
+                    
+                    // 添加日志 - 客户端接收结果
+                    addLog(`[客户端] 收到结果: 任务完成`, 'result');
+                    
+                    // 服务端停止激活
+                    serverNode.classList.remove('server-active');
+                    actionInProgress = false;
+                    
+                    // 隐藏结果气泡
+                    setTimeout(() => {
+                        resultBubble.style.opacity = '0';
+                        resultContent.style.opacity = '0';
+                        
+                        // 重置状态
+                        setTimeout(() => {
+                            statusIndicator.textContent = "等待目标...";
+                            statusIndicator.style.color = "#ffcc99";
+                            progressBar.style.width = '0%';
+                        }, 1000);
+                    }, 1000);
+                }, 1000);
+            }
+            
+            // 添加日志
+            function addLog(message, type) {
+                const now = new Date();
+                const timeStr = now.getHours().toString().padStart(2, '0') + ':' + 
+                             now.getMinutes().toString().padStart(2, '0') + ':' + 
+                             now.getSeconds().toString().padStart(2, '0');
+                const logItem = document.createElement('div');
+                logItem.className = `log-item ${type || ''}`;
+                logItem.innerHTML = `[${timeStr}] ${message}`;
+                
+                // 移除"等待目标"提示
+                if (logList.firstChild.textContent === '等待目标...') {
+                    logList.innerHTML = '';
+                }
+                
+                logList.prepend(logItem);
+                
+                // 限制日志数量
+                if (logList.children.length > 8) {
+                    logList.removeChild(logList.lastChild);
+                }
+            }
+            
+            // 代码标签切换
+            serverTab.addEventListener('click', function() {
+                serverTab.classList.add('active');
+                clientTab.classList.remove('active');
+                serverCode.style.display = 'block';
+                clientCode.style.display = 'none';
+            });
+            
+            clientTab.addEventListener('click', function() {
+                clientTab.classList.add('active');
+                serverTab.classList.remove('active');
+                serverCode.style.display = 'none';
+                clientCode.style.display = 'block';
+            });
+            
+            // 添加连接点动画
+            const dots = document.querySelectorAll('.connection-dot');
+            dots.forEach(dot => {
+                dot.style.animation = `pulse ${1 + Math.random() * 2}s infinite`;
+            });
+        });
+    </script>
+</body>
+</html>

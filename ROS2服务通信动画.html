@@ -1,0 +1,858 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ROS2服务通信原理</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        body {
+            background: linear-gradient(135deg, #1a2a6c, #2a3b5e, #1a2a6c);
+            color: #fff;
+            min-height: 100vh;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            overflow-x: hidden;
+        }
+        
+        header {
+            text-align: center;
+            margin: 20px 0 30px;
+            width: 100%;
+            padding: 20px;
+        }
+        
+        h1 {
+            font-size: 2.8rem;
+            margin-bottom: 15px;
+            text-shadow: 0 2px 10px rgba(0,0,0,0.3);
+            background: linear-gradient(45deg, #00c6ff, #0072ff);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        
+        .subtitle {
+            font-size: 1.2rem;
+            opacity: 0.9;
+            max-width: 800px;
+            margin: 0 auto;
+            line-height: 1.6;
+            color: #e0f7fa;
+        }
+        
+        .container {
+            display: flex;
+            width: 100%;
+            max-width: 1200px;
+            margin: 20px auto;
+            gap: 30px;
+        }
+        
+        .animation-section {
+            flex: 3;
+            background: rgba(10, 20, 40, 0.85);
+            border-radius: 20px;
+            padding: 25px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(64, 164, 223, 0.3);
+        }
+        
+        .control-section {
+            flex: 2;
+            background: rgba(10, 20, 40, 0.85);
+            border-radius: 20px;
+            padding: 25px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(64, 164, 223, 0.3);
+        }
+        
+        .animation-area {
+            position: relative;
+            height: 400px;
+            background: rgba(15, 30, 60, 0.7);
+            border-radius: 15px;
+            margin-top: 20px;
+            overflow: hidden;
+            border: 1px solid rgba(100, 180, 255, 0.3);
+        }
+        
+        .node {
+            position: absolute;
+            width: 180px;
+            height: 180px;
+            border-radius: 50%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            padding: 20px;
+            font-weight: bold;
+            z-index: 10;
+            transition: all 0.3s ease;
+            top: 110px;
+        }
+        
+        .server {
+            left: 80px;
+            background: radial-gradient(circle, #009900, #006600);
+            border: 3px solid #00ff00;
+            box-shadow: 0 0 30px rgba(0, 200, 0, 0.6);
+        }
+        
+        .client {
+            right: 80px;
+            background: radial-gradient(circle, #990099, #660066);
+            border: 3px solid #ff00ff;
+            box-shadow: 0 0 30px rgba(200, 0, 200, 0.6);
+        }
+        
+        .node-label {
+            font-size: 1.8rem;
+            margin-bottom: 10px;
+            color: #fff;
+        }
+        
+        .node-role {
+            font-size: 1.2rem;
+            color: rgba(255, 255, 255, 0.9);
+            margin-bottom: 15px;
+        }
+        
+        .service {
+            position: absolute;
+            top: 180px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 440px;
+            height: 40px;
+            background: rgba(180, 50, 180, 0.15);
+            border: 2px dashed rgba(220, 80, 220, 0.6);
+            border-radius: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 1.5rem;
+            color: #ff7fff;
+            z-index: 5;
+        }
+        
+        .request-bubble, .response-bubble {
+            position: absolute;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 1.8rem;
+            z-index: 20;
+            box-shadow: 0 0 20px rgba(255, 200, 0, 0.8);
+            opacity: 0;
+            transition: left 1s ease, top 1s ease;
+        }
+        
+        .request-bubble {
+            background: radial-gradient(circle, #ff5555, #cc0000);
+        }
+        
+        .response-bubble {
+            background: radial-gradient(circle, #55aaff, #0066cc);
+        }
+        
+        .request-content, .response-content {
+            position: absolute;
+            padding: 10px 15px;
+            border-radius: 10px;
+            font-size: 1.1rem;
+            min-width: 180px;
+            text-align: center;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        
+        .request-content {
+            background: rgba(255, 200, 200, 0.95);
+            color: #cc0000;
+            top: -60px;
+        }
+        
+        .response-content {
+            background: rgba(200, 230, 255, 0.95);
+            color: #0066cc;
+            bottom: -60px;
+        }
+        
+        .control-panel {
+            margin-top: 25px;
+        }
+        
+        .input-group {
+            margin-bottom: 25px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 10px;
+            font-size: 1.2rem;
+            color: #e0f7fa;
+        }
+        
+        input, select {
+            width: 100%;
+            padding: 14px;
+            border-radius: 10px;
+            border: none;
+            background: rgba(30, 60, 90, 0.7);
+            color: white;
+            font-size: 1.1rem;
+            border: 1px solid rgba(100, 180, 255, 0.4);
+            margin-bottom: 10px;
+        }
+        
+        input:focus, select:focus {
+            outline: none;
+            border-color: #00aaff;
+            background: rgba(40, 80, 120, 0.8);
+            box-shadow: 0 0 10px rgba(0, 150, 255, 0.5);
+        }
+        
+        button {
+            width: 100%;
+            padding: 15px;
+            background: linear-gradient(45deg, #990099, #cc00cc);
+            border: none;
+            border-radius: 10px;
+            color: white;
+            font-size: 1.2rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 5px 15px rgba(150, 0, 255, 0.5);
+            margin-top: 10px;
+        }
+        
+        button:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 8px 20px rgba(180, 0, 255, 0.7);
+            background: linear-gradient(45deg, #cc00cc, #ff00ff);
+        }
+        
+        button:active {
+            transform: translateY(1px);
+        }
+        
+        .code-section {
+            margin-top: 25px;
+            background: rgba(0, 20, 40, 0.9);
+            border-radius: 10px;
+            padding: 20px;
+            font-family: 'Consolas', 'Courier New', monospace;
+            overflow-x: auto;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        
+        .code-tabs {
+            display: flex;
+            margin-bottom: 15px;
+            border-bottom: 1px solid rgba(180, 80, 255, 0.4);
+        }
+        
+        .code-tab {
+            padding: 10px 20px;
+            cursor: pointer;
+            border-radius: 5px 5px 0 0;
+            background: rgba(180, 80, 255, 0.2);
+            margin-right: 5px;
+            color: #e0d0ff;
+            transition: all 0.3s;
+        }
+        
+        .code-tab:hover {
+            background: rgba(180, 80, 255, 0.3);
+        }
+        
+        .code-tab.active {
+            background: rgba(180, 80, 255, 0.5);
+            font-weight: bold;
+            color: white;
+        }
+        
+        pre {
+            color: #aaffaa;
+            line-height: 1.5;
+            font-size: 1rem;
+            white-space: pre-wrap;
+        }
+        
+        .log-section {
+            margin-top: 20px;
+            background: rgba(0, 20, 40, 0.9);
+            border-radius: 10px;
+            padding: 15px;
+            max-height: 150px;
+            overflow-y: auto;
+        }
+        
+        .log-section h3 {
+            margin-bottom: 10px;
+            color: #ffaa00;
+            text-align: center;
+        }
+        
+        .log-item {
+            padding: 8px;
+            border-bottom: 1px solid rgba(180, 100, 255, 0.2);
+            font-family: 'Courier New', monospace;
+            color: #e0f7fa;
+            font-size: 0.95rem;
+        }
+        
+        .log-item:last-child {
+            border-bottom: none;
+        }
+        
+        .log-item.request {
+            color: #ff9999;
+        }
+        
+        .log-item.response {
+            color: #99ccff;
+        }
+        
+        .explanation {
+            max-width: 1200px;
+            margin: 30px auto;
+            background: rgba(10, 30, 60, 0.8);
+            border-radius: 15px;
+            padding: 25px;
+            line-height: 1.7;
+            font-size: 1.1rem;
+            border: 1px solid rgba(180, 80, 255, 0.3);
+        }
+        
+        .explanation h2 {
+            color: #cc66ff;
+            margin-bottom: 20px;
+            text-align: center;
+            font-size: 1.8rem;
+        }
+        
+        .highlight {
+            color: #ffcc00;
+            font-weight: bold;
+        }
+        
+        .explanation ul {
+            padding-left: 30px;
+            margin: 15px 0;
+        }
+        
+        .explanation li {
+            margin-bottom: 10px;
+        }
+        
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(0, 200, 255, 0.7); }
+            70% { box-shadow: 0 0 0 15px rgba(0, 200, 255, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(0, 200, 255, 0); }
+        }
+        
+        .pulse {
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes glow {
+            0% { box-shadow: 0 0 10px rgba(0, 255, 0, 0.7); }
+            50% { box-shadow: 0 0 20px rgba(0, 255, 0, 0.9); }
+            100% { box-shadow: 0 0 10px rgba(0, 255, 0, 0.7); }
+        }
+        
+        .server-active {
+            animation: glow 1.5s infinite;
+        }
+        
+        @media (max-width: 900px) {
+            .container {
+                flex-direction: column;
+            }
+            
+            .node {
+                width: 140px;
+                height: 140px;
+            }
+            
+            .server {
+                left: 30px;
+            }
+            
+            .client {
+                right: 30px;
+            }
+            
+            .service {
+                width: 300px;
+            }
+        }
+        
+        @media (max-width: 600px) {
+            .node {
+                width: 120px;
+                height: 120px;
+                top: 130px;
+            }
+            
+            .node-label {
+                font-size: 1.5rem;
+            }
+            
+            .node-role {
+                font-size: 1rem;
+            }
+            
+            .service {
+                width: 240px;
+                font-size: 1.2rem;
+            }
+            
+            h1 {
+                font-size: 2.2rem;
+            }
+        }
+        
+        .ros-logo {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            width: 80px;
+            height: 80px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-weight: bold;
+            font-size: 1.8rem;
+            color: #cc66ff;
+            box-shadow: 0 0 20px rgba(180, 0, 255, 0.5);
+        }
+        
+        .connection-line {
+            position: absolute;
+            height: 4px;
+            background: rgba(200, 100, 255, 0.3);
+            top: 180px;
+            left: 260px;
+            width: 280px;
+            z-index: 1;
+        }
+        
+        .connection-dot {
+            position: absolute;
+            width: 8px;
+            height: 8px;
+            background: rgba(200, 100, 255, 0.8);
+            border-radius: 50%;
+            top: 178px;
+            z-index: 2;
+        }
+        
+        .service-type {
+            position: absolute;
+            top: 220px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: #cc99ff;
+            font-size: 1rem;
+            font-style: italic;
+        }
+    </style>
+</head>
+<body>
+    <div class="ros-logo">ROS2</div>
+    
+    <header>
+        <h1>ROS2 服务通信原理</h1>
+        <p class="subtitle">本动画展示了ROS2中服务(Service)的通信机制。客户端发送请求，服务端处理请求并返回响应。</p>
+    </header>
+    
+    <div class="container">
+        <section class="animation-section">
+            <h2>服务通信演示</h2>
+            <div class="animation-area">
+                <div class="connection-line"></div>
+                <div class="connection-dot" style="left: 260px;"></div>
+                <div class="connection-dot" style="left: 340px;"></div>
+                <div class="connection-dot" style="left: 420px;"></div>
+                <div class="connection-dot" style="left: 500px;"></div>
+                <div class="connection-dot" style="left: 580px;"></div>
+                
+                <div class="node server">
+                    <div class="node-label">服务端</div>
+                    <div class="node-role">服务提供者</div>
+                    <div class="node-info">/add_two_ints</div>
+                </div>
+                
+                <div class="node client pulse">
+                    <div class="node-label">客户端</div>
+                    <div class="node-role">服务调用者</div>
+                    <div class="node-info">/client_node</div>
+                </div>
+                
+                <div class="service">/add_two_ints_srv</div>
+                <div class="service-type">example_interfaces/srv/AddTwoInts</div>
+                
+                <div class="request-bubble" id="request-bubble">
+                    <div class="request-content" id="request-content">请求: a=5, b=3</div>
+                </div>
+                
+                <div class="response-bubble" id="response-bubble">
+                    <div class="response-content" id="response-content">响应: sum=8</div>
+                </div>
+            </div>
+        </section>
+        
+        <section class="control-section">
+            <h2>控制面板</h2>
+            <div class="control-panel">
+                <div class="input-group">
+                    <label for="request-input">请求参数：</label>
+                    <input type="number" id="param-a" value="5" placeholder="参数 A">
+                    <input type="number" id="param-b" value="3" placeholder="参数 B">
+                    <select id="service-type">
+                        <option value="add">加法服务 (a + b)</option>
+                        <option value="multiply">乘法服务 (a × b)</option>
+                        <option value="max">最大值服务 (max(a, b))</option>
+                    </select>
+                </div>
+                
+                <button id="send-request">发送服务请求</button>
+                
+                <div class="log-section">
+                    <h3>通信日志</h3>
+                    <div id="log-list">
+                        <div class="log-item">等待服务请求...</div>
+                    </div>
+                </div>
+                
+                <div class="code-section">
+                    <div class="code-tabs">
+                        <div class="code-tab active" data-tab="service">服务端代码</div>
+                        <div class="code-tab" data-tab="client">客户端代码</div>
+                    </div>
+                    <pre id="service-code">
+import rclpy
+from rclpy.node import Node
+from example_interfaces.srv import AddTwoInts
+
+class AddTwoIntsServer(Node):
+    def __init__(self):
+        super().__init__('add_two_ints_server')
+        self.srv = self.create_service(
+            AddTwoInts, 
+            'add_two_ints_srv', 
+            self.add_two_ints_callback)
+        self.get_logger().info('加法服务已启动...')
+
+    def add_two_ints_callback(self, request, response):
+        response.sum = request.a + request.b
+        self.get_logger().info(
+            f'收到请求: {request.a} + {request.b} = {response.sum}')
+        return response
+
+def main(args=None):
+    rclpy.init(args=args)
+    server = AddTwoIntsServer()
+    rclpy.spin(server)
+    rclpy.shutdown()
+
+if __name__ == '__main__':
+    main()</pre>
+                    <pre id="client-code" style="display:none;">
+import rclpy
+from rclpy.node import Node
+from example_interfaces.srv import AddTwoInts
+
+class AddTwoIntsClient(Node):
+    def __init__(self):
+        super().__init__('add_two_ints_client')
+        self.client = self.create_client(AddTwoInts, 'add_two_ints_srv')
+        while not self.client.wait_for_service(timeout_sec=1.0):
+            self.get_logger().info('服务不可用，等待中...')
+        self.request = AddTwoInts.Request()
+
+    def send_request(self, a, b):
+        self.request.a = a
+        self.request.b = b
+        self.future = self.client.call_async(self.request)
+        self.get_logger().info(f'发送请求: {a} + {b}')
+        return self.future
+
+def main(args=None):
+    rclpy.init(args=args)
+    client = AddTwoIntsClient()
+    
+    # 发送请求
+    future = client.send_request(5, 3)
+    
+    # 等待响应
+    rclpy.spin_until_future_complete(client, future)
+    if future.result() is not None:
+        response = future.result()
+        client.get_logger().info(f'收到响应: 和 = {response.sum}')
+    else:
+        client.get_logger().error('服务调用失败')
+    
+    rclpy.shutdown()
+
+if __name__ == '__main__':
+    main()</pre>
+                </div>
+            </div>
+        </section>
+    </div>
+    
+    <div class="explanation">
+        <h2>ROS2 服务通信原理</h2>
+        <p>在ROS2中，<span class="highlight">服务(Service)</span>是一种请求-响应模式的通信机制。客户端发送请求，服务端处理请求并返回响应。</p>
+        
+        <p>服务通信包含两个主要角色：</p>
+        
+        <ul>
+            <li><span class="highlight">服务端(Service Server)</span>：提供服务的节点，等待客户端请求并返回响应</li>
+            <li><span class="highlight">客户端(Service Client)</span>：调用服务的节点，发送请求并等待响应</li>
+        </ul>
+        
+        <p>服务通信的特点：</p>
+        
+        <ul>
+            <li><span class="highlight">同步通信</span>：客户端发送请求后阻塞等待响应</li>
+            <li><span class="highlight">一对一</span>：一个服务只能由一个服务端处理</li>
+            <li><span class="highlight">类型安全</span>：请求和响应都有明确定义的数据类型</li>
+            <li><span class="highlight">可靠性</span>：确保请求被服务端接收和处理</li>
+            <li><span class="highlight">超时机制</span>：客户端可以设置等待响应的超时时间</li>
+        </ul>
+        
+        <p>在本动画中，您可以通过输入请求参数并点击"发送服务请求"按钮来模拟ROS2中的服务调用过程。请求会从客户端传输到服务端，处理后会返回响应。</p>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const sendBtn = document.getElementById('send-request');
+            const paramA = document.getElementById('param-a');
+            const paramB = document.getElementById('param-b');
+            const serviceType = document.getElementById('service-type');
+            const requestBubble = document.getElementById('request-bubble');
+            const responseBubble = document.getElementById('response-bubble');
+            const requestContent = document.getElementById('request-content');
+            const responseContent = document.getElementById('response-content');
+            const logList = document.getElementById('log-list');
+            const serviceTab = document.querySelector('[data-tab="service"]');
+            const clientTab = document.querySelector('[data-tab="client"]');
+            const serviceCode = document.getElementById('service-code');
+            const clientCode = document.getElementById('client-code');
+            const serverNode = document.querySelector('.server');
+            const clientNode = document.querySelector('.client');
+            const serviceNode = document.querySelector('.service');
+            
+            // 获取元素中心位置
+            function getElementCenter(element) {
+                const rect = element.getBoundingClientRect();
+                const containerRect = document.querySelector('.animation-area').getBoundingClientRect();
+                return {
+                    x: rect.left + rect.width/2 - containerRect.left,
+                    y: rect.top + rect.height/2 - containerRect.top
+                };
+            }
+            
+            // 获取服务端、客户端和服务通道的中心位置
+            const serverCenter = getElementCenter(serverNode);
+            const clientCenter = getElementCenter(clientNode);
+            const serviceCenter = getElementCenter(serviceNode);
+            
+            // 初始设置消息位置
+            requestBubble.style.left = (clientCenter.x - 25) + 'px';
+            requestBubble.style.top = (clientCenter.y - 25) + 'px';
+            responseBubble.style.left = (serverCenter.x - 25) + 'px';
+            responseBubble.style.top = (serverCenter.y - 25) + 'px';
+            
+            // 发送服务请求
+            sendBtn.addEventListener('click', function() {
+                const a = parseInt(paramA.value) || 0;
+                const b = parseInt(paramB.value) || 0;
+                const service = serviceType.value;
+                
+                if (isNaN(a) || isNaN(b)) {
+                    alert("请输入有效的数字参数");
+                    return;
+                }
+                
+                // 更新请求内容
+                let requestText, responseText;
+                switch(service) {
+                    case 'add':
+                        requestText = `请求: a=${a}, b=${b}`;
+                        responseText = `响应: sum=${a + b}`;
+                        break;
+                    case 'multiply':
+                        requestText = `请求: a=${a}, b=${b}`;
+                        responseText = `响应: product=${a * b}`;
+                        break;
+                    case 'max':
+                        requestText = `请求: a=${a}, b=${b}`;
+                        responseText = `响应: max=${Math.max(a, b)}`;
+                        break;
+                    default:
+                        requestText = `请求: a=${a}, b=${b}`;
+                        responseText = `响应: result=${a + b}`;
+                }
+                
+                requestContent.textContent = requestText;
+                responseContent.textContent = responseText;
+                
+                // 添加日志 - 发送请求
+                addLog(`[客户端] 发送服务请求: a=${a}, b=${b}`, 'request');
+                
+                // 显示请求气泡
+                requestBubble.style.opacity = '1';
+                requestContent.style.opacity = '1';
+                
+                // 第一步：请求从客户端移动到服务通道
+                requestBubble.style.left = (serviceCenter.x - 25) + 'px';
+                requestBubble.style.top = (serviceCenter.y - 25) + 'px';
+                
+                setTimeout(() => {
+                    // 第二步：请求移动到服务端
+                    requestBubble.style.left = (serverCenter.x - 25) + 'px';
+                    requestBubble.style.top = (serverCenter.y - 25) + 'px';
+                    
+                    // 添加日志 - 服务端处理
+                    addLog(`[服务端] 处理请求: ${requestText}`, 'response');
+                    
+                    // 服务端激活效果
+                    serverNode.classList.add('server-active');
+                    
+                    setTimeout(() => {
+                        // 隐藏请求气泡
+                        requestBubble.style.opacity = '0';
+                        requestContent.style.opacity = '0';
+                        
+                        // 移除服务端激活效果
+                        serverNode.classList.remove('server-active');
+                        
+                        // 显示响应气泡
+                        responseBubble.style.opacity = '1';
+                        responseContent.style.opacity = '1';
+                        
+                        // 添加日志 - 发送响应
+                        addLog(`[服务端] 发送响应: ${responseText}`, 'response');
+                        
+                        setTimeout(() => {
+                            // 第三步：响应从服务端移动到服务通道
+                            responseBubble.style.left = (serviceCenter.x - 25) + 'px';
+                            responseBubble.style.top = (serviceCenter.y - 25) + 'px';
+                            
+                            setTimeout(() => {
+                                // 第四步：响应移动到客户端
+                                responseBubble.style.left = (clientCenter.x - 25) + 'px';
+                                responseBubble.style.top = (clientCenter.y - 25) + 'px';
+                                
+                                // 添加日志 - 客户端接收
+                                addLog(`[客户端] 收到响应: ${responseText}`, 'response');
+                                
+                                setTimeout(() => {
+                                    // 隐藏响应气泡
+                                    responseBubble.style.opacity = '0';
+                                    responseContent.style.opacity = '0';
+                                    
+                                    // 重置位置
+                                    setTimeout(() => {
+                                        requestBubble.style.left = (clientCenter.x - 25) + 'px';
+                                        requestBubble.style.top = (clientCenter.y - 25) + 'px';
+                                        responseBubble.style.left = (serverCenter.x - 25) + 'px';
+                                        responseBubble.style.top = (serverCenter.y - 25) + 'px';
+                                    }, 300);
+                                }, 1000);
+                            }, 1000);
+                        }, 100);
+                    }, 1500);
+                }, 1000);
+            });
+            
+            // 添加日志
+            function addLog(message, type) {
+                const now = new Date();
+                const timeStr = now.getHours().toString().padStart(2, '0') + ':' + 
+                             now.getMinutes().toString().padStart(2, '0') + ':' + 
+                             now.getSeconds().toString().padStart(2, '0');
+                const logItem = document.createElement('div');
+                logItem.className = `log-item ${type || ''}`;
+                logItem.innerHTML = `[${timeStr}] ${message}`;
+                
+                // 移除"等待服务请求"提示
+                if (logList.firstChild.textContent === '等待服务请求...') {
+                    logList.innerHTML = '';
+                }
+                
+                logList.prepend(logItem);
+                
+                // 限制日志数量
+                if (logList.children.length > 8) {
+                    logList.removeChild(logList.lastChild);
+                }
+            }
+            
+            // 代码标签切换
+            serviceTab.addEventListener('click', function() {
+                serviceTab.classList.add('active');
+                clientTab.classList.remove('active');
+                serviceCode.style.display = 'block';
+                clientCode.style.display = 'none';
+            });
+            
+            clientTab.addEventListener('click', function() {
+                clientTab.classList.add('active');
+                serviceTab.classList.remove('active');
+                serviceCode.style.display = 'none';
+                clientCode.style.display = 'block';
+            });
+            
+            // 模拟自动请求
+            setInterval(() => {
+                if (Math.random() > 0.7) {
+                    const a = Math.floor(Math.random() * 20);
+                    const b = Math.floor(Math.random() * 10);
+                    paramA.value = a;
+                    paramB.value = b;
+                    
+                    const services = ['add', 'multiply', 'max'];
+                    serviceType.value = services[Math.floor(Math.random() * services.length)];
+                    
+                    sendBtn.click();
+                }
+            }, 8000);
+            
+            // 添加连接点动画
+            const dots = document.querySelectorAll('.connection-dot');
+            dots.forEach(dot => {
+                dot.style.animation = `pulse ${1 + Math.random() * 2}s infinite`;
+            });
+            
+            // 初始日志
+            addLog('服务已就绪，等待请求...', 'response');
+        });
+    </script>
+</body>
+</html>
